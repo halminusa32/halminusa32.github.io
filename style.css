@@ -1,0 +1,144 @@
+/* ===== Ch7ヘッダーのスタイル ===== */
+.ch7 h1{
+  color: #ffffff;
+  font-size: 50px;
+  font-family: system-ui;
+  border-style: solid;
+  border-color: #0099ff;
+  border-width: 10px;
+  text-align: center;
+  border-radius: 90px;
+  padding: 20px;
+  margin: 30px;
+  background-color: #000000;
+}
+
+header.ch7 {
+  height: 550px;
+  background-size: cover;
+  padding-top: 175px;
+  background-image: url(images/IMG_0674.PNG);
+  background-position: center;
+}
+/* ===== お店紹介のスタイル ===== */
+section {
+  background-color: #fffff0;
+  padding: 32px;
+  font-family: system-ui;
+}
+
+h2 {
+  color: #800000;
+  margin-bottom: 24px;
+}
+
+p {
+  margin-left: 32px;
+  margin-right: 32px;
+  font-size: 20px;
+  font-family: system-ui;
+}
+/* ===== Ch7おすすめのパン紹介 (画像ギャラリー①)のスタイル ===== */
+.title {
+  font-size: 30px;
+  border-left-style: solid;
+  border-left-width: 10px;
+  padding-left: 15px;
+  margin-bottom: 50px;
+  font-family: system-ui;
+}
+
+.photo_ch7 {
+  padding: 50px;
+  background-image: url(images/wood_ch7.jpg);
+  font-family: system-ui;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.photo_ch7 h2 {
+  color: #ffffff;
+  border-color: #ffcc11;
+  font-family: system-ui;
+}
+
+.photo_ch7 h3 {
+  color: #663300;
+  font-family: system-ui;
+}
+
+.photo_ch7 p {
+  color: #ffffff;
+  clear: left;
+  font-family: system-ui;
+}
+
+.photo_ch7 div {
+  background-color: #ffffff;
+  width: 270px;                     /* 横幅固定 */
+  padding: 15px;
+  box-shadow: 10px 10px 20px #000000;
+  font-family: system-ui;
+  box-sizing: border-box;          /* パディング含めて制御 */
+  overflow: hidden;                /* 中身がはみ出すのを防ぐ */
+}
+/* ===== Ch7推し紹介のスタイル ===== */
+.shop_ch7 {
+  background-color: #DDAACC;
+  color: #000000;
+  padding: 30px;
+  border-radius: 10px; /* お好みで */
+  display: flex;
+  flex-direction: column; /* 縦並びに */
+  gap: 20px;
+}
+
+.title {
+  font-size: 30px;
+  border-left: 10px solid #000;
+  padding-left: 15px;
+  margin-bottom: 10px;
+  font-family: system-ui;
+}
+
+.shop_ch7 p {
+  font-size: 20px;
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 30px;
+  line-height: 1.6;
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap; /* 折り返し可能に */
+}
+
+.shop_ch7 img {
+  width: 200px;
+  height: auto;
+  flex-shrink: 0; /* 縮まらないようにする */
+  border-radius: 10px;
+}
+
+/* スマホ用 */
+@media (max-width: 600px) {
+  .shop_ch7 p {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .shop_ch7 img {
+    width: 150px;
+  }
+}
+/* ===== フッターのスタイル ===== */
+footer {
+  text-align: center;
+  background-color: #0099ff;
+  color: #ffffff;
+  padding: 10px;
+  font-family: system-ui;
+}
