@@ -137,8 +137,13 @@ p {
 /* ===== フッターのスタイル ===== */
 footer {
   text-align: center;
-  background-color: #0099ff;
-  color: #ffffff;
+  background-color: #fffaed;
+  color: #000000;
   padding: 10px;
   font-family: system-ui;
+}
+/* ===== aタグのスタイル ===== :/
+a {
+    text-decoration: none;
+    color: #000000; 
 }
