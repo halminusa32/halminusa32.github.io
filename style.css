@@ -48,6 +48,43 @@ p {
   font-family: system-ui;
 }
 
+.photo_ch6 {
+  padding: 50px;
+  background-image: url(images/wood_ch7.jpg);
+  font-family: system-ui;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.photo_ch6 h2{
+  color: #ffffff;
+  border-color: #ffcc11;
+  font-family: system-ui;
+}
+
+.photo_ch6 h3 {
+  color: #663300;
+  font-family: system-ui;
+}
+
+.photo_ch6 p {
+  color: #ffffff;
+  clear: left;
+  font-family: system-ui;
+}
+
+.photo_ch6 div {
+  background-color: #ffffff;
+  width: 500px;                     /* 横幅固定 */
+  padding: 15px;
+  box-shadow: 10px 10px 20px #000000;
+  font-family: system-ui;
+  box-sizing: border-box;          /* パディング含めて制御 */
+  overflow: hidden;                /* 中身がはみ出すのを防ぐ */
+}
+
 .photo_ch7 {
   padding: 50px;
   background-image: url(images/wood_ch7.jpg);
