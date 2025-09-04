@@ -1,0 +1,22 @@
+/* ===== Ch7ヘッダーのスタイル ===== */
+.ch7 h1{
+  color: #ffffff;
+  font-size: 50px;
+  font-family: system-ui;
+  border-style: solid;
+  border-color: #0099ff;
+  border-width: 10px;
+  text-align: center;
+  border-radius: 90px;
+  padding: 20px;
+  margin: 30px;
+  background-color: #000000;
+}
+
+header.ch7 {
+  height: 550px;
+  background-size: cover;
+  padding-top: 175px;
+  background-image: url(images/IMG_0536.png);
+  background-position: center;
+}
