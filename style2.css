@@ -20,6 +20,24 @@ header.ch7 {
   background-image: url(images/IMG_0536.png);
   background-position: center;
 }
+/* ===== 自己紹介のスタイル ===== */
+section {
+  background-color: #fffff0;
+  padding: 32px;
+  font-family: system-ui;
+}
+
+h2 {
+  color: #800000;
+  margin-bottom: 24px;
+}
+
+p {
+  margin-left: 32px;
+  margin-right: 32px;
+  font-size: 20px;
+  font-family: system-ui;
+}
 /* ===== Ch7おすすめのパン紹介 (画像ギャラリー①)のスタイル ===== */
 .title {
   font-size: 30px;
