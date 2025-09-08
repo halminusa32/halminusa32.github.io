@@ -111,7 +111,6 @@ li {
 a {
   display: block;
   text-decoration: none;
-  color: black;
   margin-right: 35px;
   font-family: system-ui;
 }
@@ -126,8 +125,7 @@ footer {
 /* ===== aタグのスタイル ===== */
 a {
     text-decoration: none;
-    color: #000000; 
-}
+    }
 /* ===== ロード中のスピナー ===== */
 .loading-spinner {
     border: 4px solid #f3f3f3;
