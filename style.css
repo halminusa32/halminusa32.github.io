@@ -111,7 +111,7 @@ li {
 a {
   display: block;
   text-decoration: none;
-  color: white;
+  color: black;
   margin-right: 35px;
   font-family: system-ui;
 }
@@ -123,12 +123,12 @@ footer {
   padding: 10px;
   font-family: system-ui;
 }
-/* ===== aタグのスタイル ===== :/
+/* ===== aタグのスタイル ===== */
 a {
     text-decoration: none;
     color: #000000; 
 }
-/* ===== ロード中のスピナー ===== :/
+/* ===== ロード中のスピナー ===== */
 .loading-spinner {
     border: 4px solid #f3f3f3;
     border-top: 4px solid #555;
