@@ -99,6 +99,18 @@ nav {
   height: 70px;
   background-color: dimgray;
 }
+ul {
+  display: flex;
+}
+li {
+  list-style: none;
+}
+a {
+  display: block;
+  text-decoration: none;
+  color: white;
+  margin-right: 35px;
+}
 /* ===== フッターのスタイル ===== */
 footer {
   text-align: center;
