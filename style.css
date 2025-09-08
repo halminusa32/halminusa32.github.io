@@ -2,7 +2,7 @@
 .ch7 h1{
   color: #ffffff;
   font-size: 50px;
-  font-family: url(fonts/ZenMaruGothic-Regular.ttf);
+  font-family: system-ui;
   border-style: solid;
   border-color: #0099ff;
   border-width: 10px;
