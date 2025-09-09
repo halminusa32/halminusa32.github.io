@@ -36,7 +36,7 @@ header.ch7 {
 section {
   background-color: #fffff0;
   padding: 32px;
-  font-family: system-ui;
+  font-family: "Zen Maru Gothic";
 }
 
 h2 {
@@ -53,7 +53,7 @@ p {
   margin-left: 32px;
   margin-right: 32px;
   font-size: 20px;
-  font-family: system-ui;
+  font-family: "Zen Maru Gothic";
 }
 /* ===== Ch7推し紹介のスタイル ===== */
 .shop_ch7 {
