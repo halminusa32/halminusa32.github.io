@@ -6,7 +6,7 @@
 }
 @font-face {
   font-family: "keifont";
-  src: url('../fonts/keifont.ttf') format('truetype')
+  src: url('../fonts/keifont.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
