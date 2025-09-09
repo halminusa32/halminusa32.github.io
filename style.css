@@ -4,11 +4,17 @@
   font-weight: normal;
   font-style: normal;
 }
+@font-face {
+  font-family: "keifont";
+  src: url('../fonts/keifont.ttf') format('truetype')
+  font-weight: normal;
+  font-style: normal;
+}
 /* ===== Ch7ヘッダーのスタイル ===== */
 .ch7 h1{
   color: #ffffff;
   font-size: 50px;
-  font-family: "Zen Maru Gothic";
+  font-family: "keifont";
   border-style: solid;
   border-color: #0099ff;
   border-width: 10px;
