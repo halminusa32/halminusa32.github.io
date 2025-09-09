@@ -1,8 +1,14 @@
+@font-face {
+  font-family: "Zen Maru Gothic";
+  src: url('../fonts/ZenMaruGothic-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 /* ===== Ch7ヘッダーのスタイル ===== */
 .ch7 h1{
   color: #ffffff;
   font-size: 50px;
-  font-family: system-ui;
+  font-family: "Zen Maru Gothic";
   border-style: solid;
   border-color: #0099ff;
   border-width: 10px;
