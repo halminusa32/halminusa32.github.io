@@ -10,11 +10,17 @@
   font-weight: normal;
   font-style: normal;
 }
+@font-face{
+  font-family: "nicomoji-plus";
+  src: url('../fonts/nicomoji-plus_v2-5.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 /* ===== Ch7ヘッダーのスタイル ===== */
 .ch7 h1{
   color: #ffffff;
   font-size: 50px;
-  font-family: "keifont";
+  font-family: "nicomoji-plus";
   border-style: solid;
   border-color: #0099ff;
   border-width: 10px;
