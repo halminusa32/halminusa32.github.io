@@ -61,12 +61,6 @@
   background: rgba(255, 255, 255, 0);
 }
 
-#drawer_input:checked ~ .drawer_open span::after {
-  top: 0;
-  transform: rotate(-45deg);
-}
-
-
 /* アイコンがクリックされたらアイコンが×印になように上下の線を回転 */
 #drawer_input:checked ~ .drawer_open span::before {
   bottom: 0;
