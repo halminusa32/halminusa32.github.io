@@ -16,6 +16,60 @@
   font-weight: normal;
   font-style: normal;
 }
+/* hamburgermenu */
+.hamburger {
+  width: 40px;
+  height: 30px;
+  position: relative;
+  cursor: pointer;
+  z-index: 100;
+}
+
+.hamburger span {
+  display: block;
+  height: 4px;
+  width: 100%;
+  background: #333;
+  margin: 6px 0;
+  border-radius: 2px;
+  transition: 0.4s;
+}
+
+.menu {
+  position: fixed;
+  top: 0;
+  right: -220px;
+  width: 200px;
+  height: 100%;
+  background: #fafafa;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  transition: right 0.4s;
+  padding-top: 60px;
+}
+
+.menu ul {
+  list-style: none;
+  padding: 0;
+}
+
+.menu li {
+  margin: 20px 0;
+}
+
+.menu.open {
+  right: 0;
+}
+
+/* ハンバーガーのアニメーション */
+.hamburger.active span:nth-child(1) {
+  transform: translateY(10px) rotate(45deg);
+}
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger.active span:nth-child(3) {
+  transform: translateY(-10px) rotate(-45deg);
+}
 /* ===== Ch7ヘッダーのスタイル ===== */
 .ch7 h1{
   color: #ffffff;
