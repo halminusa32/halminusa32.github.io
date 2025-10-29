@@ -16,11 +16,58 @@
   font-weight: normal;
   font-style: normal;
 }
-/* hiddenchackbox */
-.drawer_hidden {
-  display: none;
+body {
+  background: linear-gradient(to bottom, #fffaf0, #f0e68c);
+  font-family: "M PLUS Rounded 1c", sans-serif;
+  color: #333;
+  margin: 0;
+  padding: 0;
 }
-/* hamberger */
+
+header.ch7 {
+  background-color: #8fbc8f;
+  color: white;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.hero-header {
+  position: relative;
+  width: 100%;
+  height: 100vh; /* 画面いっぱい */
+  background-image: url("images/IMG_0536.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeUp 1.5s ease-out forwards;
+
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.overlay {
+  position: absolute;
+  text-align: center;
+  color: #616161;
+  z-index: 1;
+  padding: 20px;
+}
+
+.overlay h1 {
+  font-size: 6rem;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.6);
+}
+
+.overlay p {
+  font-size: 1.5rem;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+}
+
 #menuButton {
   position: fixed;
   top: 20px;
@@ -81,146 +128,72 @@
 #sideMenu a:hover {
   color: #ffd86b;
 }
-/* ===== Ch7ヘッダーのスタイル ===== */
-.ch7 h1{
-  color: #ffffff;
-  font-size: 50px;
-  font-family: "nicomoji-plus";
-  border-style: solid;
-  border-color: #0099ff;
-  border-width: 10px;
-  text-align: center;
-  border-radius: 90px;
-  padding: 20px;
-  margin: 30px;
-  background-color: #000000;
+
+#intro_typewriter {
+  white-space: pre-line;
+  font-size: 1.3em;
+  color: #4b0082; /* 魔法っぽい紫 */
+  text-shadow: 1px 1px 4px rgba(75, 0, 130, 0.4);
+  animation: fadeUp 1.5s ease-out forwards;
 }
 
-header.ch7 {
-  height: 550px;
-  background-size: cover;
-  padding-top: 175px;
-  background-image: url(images/IMG_0536.png);
-  background-position: center;
+h1 {
+  font-size: 2.5em;
+  line-height: 1.4;
+  margin: 0;
+  animation: fadeUp 1.5s ease-out forwards;
 }
-/* ===== お店紹介のスタイル ===== */
+
 section {
-  background-color: #fffff0;
-  padding: 32px;
-  font-family: "Zen Maru Gothic";
+  padding: 30px;
+  border-bottom: 1px solid #ccc;
 }
 
 h2 {
-  color: #800000;
-  margin-bottom: 24px;
-}
-
-h3 {
-  color: #ff6e6e
-  margin-bottom: 24px:
+  color: #2e8b57;
+  font-size: 1.8em;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.6);
+  animation: fadeUp 1.5s ease-out forwards;
 }
 
 p {
-  margin-left: 32px;
-  margin-right: 32px;
-  font-size: 20px;
-  font-family: "Zen Maru Gothic";
-}
-/* ===== Ch7推し紹介のスタイル ===== */
-.shop_ch7 {
-  background-color: #DDAACC;
-  color: #000000;
-  padding: 30px;
-  border-radius: 10px; /* お好みで */
-  display: flex;
-  flex-direction: column; /* 縦並びに */
-  gap: 20px;
-}
-
-.title {
-  font-size: 30px;
-  border-left: 10px solid #000;
-  padding-left: 15px;
-  margin-bottom: 10px;
-  font-family: system-ui;
-}
-
-.shop_ch7 p {
-  font-size: 20px;
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 30px;
+  font-size: 1.2em;
   line-height: 1.6;
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  flex-wrap: wrap; /* 折り返し可能に */
+  animation: fadeUp 1.5s ease-out forwards;
 }
 
-.shop_ch7 img {
-  width: 200px;
-  height: auto;
-  flex-shrink: 0; /* 縮まらないようにする */
-  border-radius: 10px;
+div {
+  font-size: 1.2em;
+  line-height: 1.6;
+  animation: fadeUp 1.5s ease-out forwards;
 }
 
-/* スマホ用 */
-@media (max-width: 600px) {
-  .shop_ch7 p {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .shop_ch7 img {
-    width: 150px;
-  }
-}
-/* ===== ナビバースタイル ===== */
-nav {
-  width: 100%;
-  height: 70px;
-  background-color: #fffff0;
-  font-family: system-ui;
-}
-ul {
-  display: flex;
-  font-family: system-ui;
-}
-li {
-  list-style: none;
-  font-family: system-ui;
-}
 a {
-  display: block;
+  color: #1e90ff;
   text-decoration: none;
-  margin-right: 35px;
-  font-family: system-ui;
-}
-/* ===== フッターのスタイル ===== */
-footer {
-  text-align: center;
-  background-color: #fffaed;
-  color: #000000;
-  padding: 10px;
-  font-family: system-ui;
-}
-/* ===== aタグのスタイル ===== */
-a {
-    text-decoration: none;
-    }
-/* ===== ロード中のスピナー ===== */
-.loading-spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #555;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin: 40px auto;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+a:hover {
+  text-decoration: underline;
+  color: #ff4500;
+}
+
+footer {
+  background-color: #eee;
+  text-align: center;
+  padding: 20px;
+  font-size: 0.9em;
+  color: #555;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
