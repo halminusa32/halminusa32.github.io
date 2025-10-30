@@ -26,6 +26,8 @@ body {
 
 header.ch7 {
   background-image: url("images/IMG_0536.png");
+  background-position: center;
+  background-size: cover;
   color: white;
   padding: 40px 20px;
   text-align: center;
