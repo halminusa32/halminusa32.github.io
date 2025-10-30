@@ -1,5 +1,5 @@
 function title_typeWriter() {
-  const titletext = "鳩/てぃの公式サイト";
+  const titletext = "はるみんの公式サイト";
   const target = document.getElementById("title_typewriter");
   let i = 0;
 
