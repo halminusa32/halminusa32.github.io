@@ -1,8 +1,8 @@
 function intro_typeWriter() {
   const texts = [
-    "名前: てぃ",
-    "年齢: 17歳",
-    "好きなもの: 魔法"
+    "名前: はるみん",
+    "年齢: 14歳",
+    "好きなもの: 音ゲー"
   ];
   const target = document.getElementById("intro_typewriter");
   let textIndex = 0;
