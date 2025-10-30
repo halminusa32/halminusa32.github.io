@@ -1,21 +1,3 @@
-@font-face {
-  font-family: "Zen Maru Gothic";
-  src: url('../fonts/ZenMaruGothic-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-}
-@font-face {
-  font-family: "keifont";
-  src: url('../fonts/keifont.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-}
-@font-face{
-  font-family: "nicomoji-plus";
-  src: url('../fonts/nicomoji-plus_v2-5.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-}
 body {
   background: linear-gradient(to bottom, #fffaf0, #f0e68c);
   font-family: "M PLUS Rounded 1c", sans-serif;
@@ -25,9 +7,7 @@ body {
 }
 
 header.ch7 {
-  background-image: url("images/IMG_0536.png");
-  background-position: center;
-  background-size: cover;
+  background-color: #8fbc8f;
   color: white;
   padding: 40px 20px;
   text-align: center;
