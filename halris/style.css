@@ -6,7 +6,7 @@ body {
 #room-setup { background: #111; padding: 20px; border-radius: 12px; border: 2px solid #333; text-align: center; touch-action: auto; }
 #game-container { display: flex; gap: 15px; background: #111; padding: 15px; border-radius: 10px; border: 2px solid #444; }
 .player-section { display: flex; flex-direction: column; align-items: center; }
-canvas { background: #050505; border: 1px solid #222; }
+canvas { background: #404040; border: 1px solid #222; }
 #hold-canvas { margin-bottom: 5px; background: #111; border: 1px solid #333; }
 #enemy-tetris { opacity: 0.4; transform: scale(0.9); }
 .touch-controls { display: none; margin-top: 10px; flex-direction: column; gap: 8px; }
