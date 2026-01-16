@@ -18,9 +18,10 @@ let roomId = null, myId = null, enemyId = null;
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const eCanvas = document.getElementById('enemy-tetris'), eCtx = eCanvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
+const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
-const ROWS = 20, COLS = 10, SIZE = 24;
-const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#84ff80', z:'#ff4545', j:'#006eff', l:'#eeaa00' };
+const ROWS = 20, COLS = 10, SIZE = 24, E_SIZE = 18;
+const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00' };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
@@ -29,6 +30,22 @@ const SHAPES = {
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, score = 0, gameOver = false;
 let holdPiece = null, canHold = true;
+let bag = [], nextPiece = null;
+
+// 七種一巡（7-Bag）
+function refillBag() {
+    let pieces = ['i', 'o', 't', 's', 'z', 'j', 'l'];
+    for (let i = pieces.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+    }
+    bag = [...pieces];
+}
+
+function getNextFromBag() {
+    if (bag.length === 0) refillBag();
+    return bag.pop();
+}
 
 document.getElementById('btn-p1').onclick = () => join('p1');
 document.getElementById('btn-p2').onclick = () => join('p2');
@@ -42,6 +59,7 @@ function join(role) {
     onValue(ref(db, `games/${roomId}/${enemyId}`), (snap) => {
         const d = snap.val(); if(d) drawEnemy(d);
     });
+    nextPiece = getNextFromBag();
     spawn(); update(); setInterval(drop, 1000);
 }
 
@@ -50,19 +68,18 @@ function sync() {
     set(ref(db, `games/${roomId}/${myId}`), { board, pos: current.pos, shape: current.shape, type: current.type, score });
 }
 
-function drawBlock(c, x, y, color, op = 1, size = SIZE) {
+function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op; c.fillStyle = color;
-    c.fillRect(x * size, y * size, size - 1, size - 1);
+    c.fillRect(x * sz, y * sz, sz - 1, sz - 1);
     c.globalAlpha = 1;
 }
 
-function drawHold() {
-    hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
-    if (!holdPiece) return;
-    const shape = SHAPES[holdPiece];
-    const size = 15;
+function drawSideCanvas(ctxObj, piece) {
+    ctxObj.clearRect(0, 0, 60, 60);
+    if (!piece) return;
+    const shape = SHAPES[piece];
     shape.forEach((r, y) => r.forEach((v, x) => {
-        if (v) drawBlock(hCtx, x + 0.5, y + 0.5, COLORS[holdPiece], 1, size);
+        if (v) drawBlock(ctxObj, x + 0.5, y + 0.5, COLORS[piece], 1, 15);
     }));
 }
 
@@ -75,9 +92,9 @@ function drawGhost() {
 }
 
 function drawEnemy(d) {
-    eCtx.fillStyle = '#050505'; eCtx.fillRect(0,0,eCanvas.width,eCanvas.height);
-    d.board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(eCtx, x, y, c); }));
-    d.shape.forEach((r,y) => r.forEach((v,x) => { if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type]); }));
+    eCtx.fillStyle = '#000'; eCtx.fillRect(0,0,eCanvas.width,eCanvas.height);
+    d.board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(eCtx, x, y, c, 1, E_SIZE); }));
+    d.shape.forEach((r,y) => r.forEach((v,x) => { if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, E_SIZE); }));
     document.getElementById('enemy-score').innerText = d.score;
 }
 
@@ -91,9 +108,11 @@ function collide(b, p) {
 }
 
 function spawn(type = null) {
-    const t = type || 'itsszjl'[Math.floor(Math.random()*7)];
+    const t = type || nextPiece;
+    if (!type) nextPiece = getNextFromBag();
     current = { pos:{x:3, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
+    drawSideCanvas(nCtx, nextPiece);
     if (collide(board, current)) gameOver = true;
     sync();
 }
@@ -105,7 +124,7 @@ function hold() {
     if (oldHold) spawn(oldHold);
     else spawn();
     canHold = false;
-    drawHold();
+    drawSideCanvas(hCtx, holdPiece);
 }
 
 function drop() {
@@ -148,9 +167,7 @@ function update() {
 
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
-    const keys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','x','X','c','C','z','Z','Shift'];
-    if (keys.includes(e.key)) e.preventDefault();
-    
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','x','X','c','C','z','Z','Shift'].includes(e.key)) e.preventDefault();
     if (e.key === 'ArrowLeft') { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); }
     if (e.key === 'ArrowRight') { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); }
     if (e.key === 'ArrowDown') drop();
