@@ -1,0 +1,18 @@
+body { background: #000; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+#game-container { display: flex; gap: 20px; background: #111; padding: 15px; border-radius: 10px; border: 2px solid #333; }
+.player-section { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.main-area { display: flex; gap: 5px; }
+canvas { background: #050505; border: 1px solid #222; }
+#enemy-tetris { opacity: 0.6; transform: scale(0.9); }
+.side-panel { width: 60px; display: flex; flex-direction: column; gap: 10px; }
+.label { font-size: 10px; color: #888; text-align: center; }
+.value { font-size: 14px; text-align: center; }
+.touch-controls { display: none; margin-top: 15px; flex-direction: column; gap: 8px; }
+@media (max-width: 700px) {
+    #game-container { scale: 0.7; }
+    .touch-controls { display: flex; }
+}
+.control-row { display: flex; justify-content: center; gap: 10px; }
+.btn { width: 50px; height: 50px; border-radius: 50%; border: none; background: #333; color: #fff; font-size: 18px; touch-action: manipulation; }
+.blue { background: #007bff; } .purple { background: #6f42c1; } .gray { width: 70px; border-radius: 10px; }
+.rotate-group { display: flex; gap: 8px; margin-left: 10px; }
