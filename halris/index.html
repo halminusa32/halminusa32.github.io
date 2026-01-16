@@ -2,22 +2,26 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>O-SPIN ONLINE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HALRIS ONLINE</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>O-SPIN ONLINE</h1>
-    <div id="game-container">
+    <h1>HALRIS ONLINE</h1>
+
+    <div id="room-setup">
+        <input type="text" id="room-id" placeholder="招待コードを入力">
+        <div class="join-buttons">
+            <button id="btn-p1" class="btn gray">1Pとして入る</button>
+            <button id="btn-p2" class="btn gray">2Pとして入る</button>
+        </div>
+        <p id="status-msg">同じコードを入れた人と対戦できます</p>
+    </div>
+
+    <div id="game-container" style="display: none;">
         <div class="player-section">
             <div class="label">YOU</div>
             <div class="main-area">
-                <div class="side-panel">
-                    <div class="panel-item">
-                        <div class="label">HOLD</div>
-                        <canvas id="hold" width="60" height="60"></canvas>
-                    </div>
-                </div>
                 <canvas id="tetris" width="240" height="480"></canvas>
             </div>
         </div>
@@ -36,16 +40,14 @@
 
     <div class="touch-controls">
         <div class="control-row">
-            <button id="btn-hold" class="btn gray">HOLD</button>
-            <button id="btn-up" class="btn blue">DROP</button>
+            <button id="ctrl-up" class="btn blue">DROP</button>
         </div>
         <div class="control-row">
-            <button id="btn-left" class="btn">←</button>
-            <button id="btn-down" class="btn">↓</button>
-            <button id="btn-right" class="btn">→</button>
+            <button id="ctrl-left" class="btn">←</button>
+            <button id="ctrl-down" class="btn">↓</button>
+            <button id="ctrl-right" class="btn">→</button>
             <div class="rotate-group">
-                <button id="btn-rot-l" class="btn purple">Z</button>
-                <button id="btn-rot-r" class="btn purple">X</button>
+                <button id="ctrl-rot" class="btn purple">Rotate</button>
             </div>
         </div>
     </div>
