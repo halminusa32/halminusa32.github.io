@@ -20,7 +20,7 @@ const eCanvas = document.getElementById('enemy-tetris'), eCtx = eCanvas.getConte
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
-const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00' };
+const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#84ff80', z:'#ff4545', j:'#006eff', l:'#eeaa00' };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
