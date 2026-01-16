@@ -16,15 +16,21 @@
         </div>
     </div>
     <div id="game-container" style="display: none;">
-        <div class="player-section">
+        <div class="player-section side">
             <div class="label">HOLD</div>
             <canvas id="hold-canvas" width="60" height="60"></canvas>
-            <div class="label" style="margin-top:10px;">YOU</div>
+            <div class="label" style="margin-top:20px;">NEXT</div>
+            <canvas id="next-canvas" width="60" height="60"></canvas>
+        </div>
+
+        <div class="player-section">
+            <div class="label">YOU</div>
             <canvas id="tetris" width="240" height="480"></canvas>
         </div>
+
         <div class="player-section enemy">
             <div class="label">ENEMY</div>
-            <canvas id="enemy-tetris" width="240" height="480"></canvas>
+            <canvas id="enemy-tetris" width="180" height="360"></canvas>
             <div id="enemy-score" class="value">0</div>
         </div>
     </div>
