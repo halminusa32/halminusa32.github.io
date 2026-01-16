@@ -1,18 +1,17 @@
-body { 
-    background: #000; color: #fff; font-family: monospace; 
-    display: flex; flex-direction: column; align-items: center; justify-content: center; 
-    min-height: 100vh; margin: 0; overflow: hidden; touch-action: none;
-}
+body { background: #000; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; }
 #room-setup { background: #111; padding: 20px; border-radius: 12px; border: 2px solid #333; text-align: center; touch-action: auto; }
-#game-container { display: flex; gap: 15px; background: #111; padding: 15px; border-radius: 10px; border: 2px solid #444; }
+#game-container { display: flex; gap: 10px; background: #111; padding: 10px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
 .player-section { display: flex; flex-direction: column; align-items: center; }
+.side { width: 70px; }
 canvas { background: #404040; border: 1px solid #222; }
-#hold-canvas { margin-bottom: 5px; background: #111; border: 1px solid #333; }
-#enemy-tetris { opacity: 0.4; transform: scale(0.9); }
-.touch-controls { display: none; margin-top: 10px; flex-direction: column; gap: 8px; }
-@media (max-width: 750px) { #game-container { scale: 0.75; } .touch-controls { display: flex; } }
-.control-row { display: flex; justify-content: center; gap: 10px; }
-.btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #333; color: #fff; font-weight: bold; user-select: none; }
-.blue { background: #007bff; width: 140px; border-radius: 10px; }
+#hold-canvas, #next-canvas { background: #111; border: 1px solid #333; }
+#enemy-tetris { opacity: 0.4; background: #000; }
+.label { font-size: 10px; color: #888; margin-bottom: 3px; }
+.value { font-size: 14px; color: #fff; }
+.touch-controls { display: none; margin-top: 10px; flex-direction: column; gap: 5px; }
+@media (max-width: 750px) { #game-container { scale: 0.7; } .touch-controls { display: flex; } }
+.control-row { display: flex; justify-content: center; gap: 8px; }
+.btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #333; color: #fff; font-weight: bold; }
+.blue { background: #007bff; width: 120px; border-radius: 10px; }
 .purple { background: #6f42c1; }
-.gray { width: 60px; border-radius: 8px; }
+.gray { width: 70px; border-radius: 8px; font-size: 11px; }
