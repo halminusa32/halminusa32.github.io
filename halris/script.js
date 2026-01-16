@@ -17,6 +17,7 @@ const db = getDatabase(app);
 let roomId = null, myId = null, enemyId = null;
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const eCanvas = document.getElementById('enemy-tetris'), eCtx = eCanvas.getContext('2d');
+const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
 const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00' };
@@ -27,8 +28,8 @@ const SHAPES = {
 
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, score = 0, gameOver = false;
+let holdPiece = null, canHold = true;
 
-// 参加処理
 document.getElementById('btn-p1').onclick = () => join('p1');
 document.getElementById('btn-p2').onclick = () => join('p2');
 
@@ -44,27 +45,32 @@ function join(role) {
     spawn(); update(); setInterval(drop, 1000);
 }
 
-// 同期 & 描画
 function sync() {
     if(!current || !roomId) return;
     set(ref(db, `games/${roomId}/${myId}`), { board, pos: current.pos, shape: current.shape, type: current.type, score });
 }
 
-function drawBlock(context, x, y, color, opacity = 1) {
-    context.globalAlpha = opacity;
-    context.fillStyle = color;
-    context.fillRect(x * SIZE, y * SIZE, SIZE - 1, SIZE - 1);
-    context.globalAlpha = 1;
+function drawBlock(c, x, y, color, op = 1, size = SIZE) {
+    c.globalAlpha = op; c.fillStyle = color;
+    c.fillRect(x * size, y * size, size - 1, size - 1);
+    c.globalAlpha = 1;
+}
+
+function drawHold() {
+    hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+    if (!holdPiece) return;
+    const shape = SHAPES[holdPiece];
+    const size = 15;
+    shape.forEach((r, y) => r.forEach((v, x) => {
+        if (v) drawBlock(hCtx, x + 0.5, y + 0.5, COLORS[holdPiece], 1, size);
+    }));
 }
 
 function drawGhost() {
-    if (!current) return;
-    let ghostPos = { ...current.pos };
-    while (!collide(board, { pos: { x: ghostPos.x, y: ghostPos.y + 1 }, shape: current.shape })) {
-        ghostPos.y++;
-    }
-    current.shape.forEach((row, y) => row.forEach((v, x) => {
-        if (v) drawBlock(ctx, ghostPos.x + x, ghostPos.y + y, COLORS[current.type], 0.2);
+    let g = { ...current.pos };
+    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
+    current.shape.forEach((r, y) => r.forEach((v, x) => {
+        if (v) drawBlock(ctx, g.x + x, g.y + y, COLORS[current.type], 0.2);
     }));
 }
 
@@ -84,11 +90,22 @@ function collide(b, p) {
     return false;
 }
 
-function spawn() {
-    const t = 'itsszjl'[Math.floor(Math.random()*7)];
+function spawn(type = null) {
+    const t = type || 'itsszjl'[Math.floor(Math.random()*7)];
     current = { pos:{x:3, y:0}, shape:SHAPES[t], type:t };
+    canHold = true;
     if (collide(board, current)) gameOver = true;
     sync();
+}
+
+function hold() {
+    if (!canHold || gameOver) return;
+    const oldHold = holdPiece;
+    holdPiece = current.type;
+    if (oldHold) spawn(oldHold);
+    else spawn();
+    canHold = false;
+    drawHold();
 }
 
 function drop() {
@@ -106,6 +123,19 @@ function drop() {
     sync();
 }
 
+function hardDrop() {
+    while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) current.pos.y++;
+    drop();
+}
+
+function rotate(dir = 1) {
+    const prev = current.shape;
+    if(dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
+    if (collide(board, current)) current.shape = prev;
+    sync();
+}
+
 function update() {
     ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(ctx, x, y, c); }));
@@ -116,34 +146,27 @@ function update() {
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// 操作
-const rotate = () => {
-    const prev = current.shape;
-    current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    if (collide(board, current)) current.shape = prev;
-    sync();
-};
-
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
-    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); // スクロール防止
+    const keys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','x','X','c','C','z','Z','Shift'];
+    if (keys.includes(e.key)) e.preventDefault();
+    
     if (e.key === 'ArrowLeft') { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); }
     if (e.key === 'ArrowRight') { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); }
     if (e.key === 'ArrowDown') drop();
-    if (e.key === 'z' || e.key === 'Z' || e.key === 'ArrowUp') rotate();
+    if (e.key === 'ArrowUp' || e.key === 'x' || e.key === 'X') rotate(1);
+    if (e.key === 'z' || e.key === 'Z') rotate(-1);
+    if (e.key === ' ') hardDrop();
+    if (e.key === 'c' || e.key === 'C' || e.key === 'Shift') hold();
 });
 
-// スマホ用 (スクロール防止の e.preventDefault() 追加)
-const handleTouch = (id, fn) => {
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', (e) => {
-        e.preventDefault(); 
-        if(!gameOver && current) fn();
-    }, { passive: false });
+const touch = (id, fn) => {
+    document.getElementById(id).addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
 };
-
-handleTouch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); });
-handleTouch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); });
-handleTouch('ctrl-down', drop);
-handleTouch('ctrl-up', () => { while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) current.pos.y++; drop(); });
-handleTouch('ctrl-rot', rotate);
+touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); });
+touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); });
+touch('ctrl-down', drop);
+touch('ctrl-up', hardDrop);
+touch('ctrl-rot-r', () => rotate(1));
+touch('ctrl-rot-l', () => rotate(-1));
+touch('ctrl-hold', hold);
