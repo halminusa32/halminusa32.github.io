@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O-SPIN ONLINE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>O-SPIN ONLINE</h1>
+    <div id="game-container">
+        <div class="player-section">
+            <div class="label">YOU</div>
+            <div class="main-area">
+                <div class="side-panel">
+                    <div class="panel-item">
+                        <div class="label">HOLD</div>
+                        <canvas id="hold" width="60" height="60"></canvas>
+                    </div>
+                </div>
+                <canvas id="tetris" width="240" height="480"></canvas>
+            </div>
+        </div>
+
+        <div class="player-section enemy">
+            <div class="label">ENEMY</div>
+            <div class="main-area">
+                <canvas id="enemy-tetris" width="240" height="480"></canvas>
+                <div class="side-panel">
+                    <div class="label">SCORE</div>
+                    <div id="enemy-score" class="value">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="touch-controls">
+        <div class="control-row">
+            <button id="btn-hold" class="btn gray">HOLD</button>
+            <button id="btn-up" class="btn blue">DROP</button>
+        </div>
+        <div class="control-row">
+            <button id="btn-left" class="btn">←</button>
+            <button id="btn-down" class="btn">↓</button>
+            <button id="btn-right" class="btn">→</button>
+            <div class="rotate-group">
+                <button id="btn-rot-l" class="btn purple">Z</button>
+                <button id="btn-rot-r" class="btn purple">X</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
