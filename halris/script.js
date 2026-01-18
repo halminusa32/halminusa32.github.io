@@ -20,7 +20,7 @@ const eCanvas = document.getElementById('enemy-tetris'), eCtx = eCanvas.getConte
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
-const ROWS = 20, COLS = 10, SIZE = 24, E_SIZE = 18;
+const ROWS = 20, COLS = 10, SIZE = 24;
 const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00' };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
@@ -32,7 +32,6 @@ let current = null, score = 0, gameOver = false;
 let holdPiece = null, canHold = true;
 let bag = [], nextPiece = null;
 
-// 七種一巡（7-Bag）
 function refillBag() {
     let pieces = ['i', 'o', 't', 's', 'z', 'j', 'l'];
     for (let i = pieces.length - 1; i > 0; i--) {
@@ -56,30 +55,70 @@ function join(role) {
     roomId = input; myId = role; enemyId = role === 'p1' ? 'p2' : 'p1';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
+
+    // 相手のデータを監視して描画
     onValue(ref(db, `games/${roomId}/${enemyId}`), (snap) => {
-        const d = snap.val(); if(d) drawEnemy(d);
+        const d = snap.val();
+        if(d) drawEnemy(d);
     });
+
     nextPiece = getNextFromBag();
     spawn(); update(); setInterval(drop, 1000);
 }
 
 function sync() {
     if(!current || !roomId) return;
-    set(ref(db, `games/${roomId}/${myId}`), { board, pos: current.pos, shape: current.shape, type: current.type, score });
+    set(ref(db, `games/${roomId}/${myId}`), { 
+        board, 
+        pos: current.pos, 
+        shape: current.shape, 
+        type: current.type, 
+        score 
+    });
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
-    c.globalAlpha = op; c.fillStyle = color;
+    c.save();
+    c.globalAlpha = op;
+    c.fillStyle = color;
     c.fillRect(x * sz, y * sz, sz - 1, sz - 1);
-    c.globalAlpha = 1;
+    c.restore();
 }
+
+function drawEnemy(d) {
+    if (!eCtx) return;
+    eCtx.fillStyle = '#000';
+    eCtx.fillRect(0, 0, eCanvas.width, eCanvas.height);
+    
+    // 敵キャンバスの幅から1マスのサイズを計算（iPadの表示ズレ防止）
+    const sz = eCanvas.width / 10;
+
+    // 盤面の描画
+    if (d.board) {
+        d.board.forEach((r, y) => r.forEach((c, x) => {
+            if(c) drawBlock(eCtx, x, y, c, 1, sz);
+        }));
+    }
+
+    // 落下中のミノの描画
+    if (d.shape && d.pos) {
+        d.shape.forEach((r, y) => r.forEach((v, x) => {
+            if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz);
+        }));
+    }
+    
+    const eScore = document.getElementById('enemy-score');
+    if (eScore) eScore.innerText = d.score || 0;
+}
+
+// --- 以下、ロジック部分は変更なし ---
 
 function drawSideCanvas(ctxObj, piece) {
     ctxObj.clearRect(0, 0, 60, 60);
     if (!piece) return;
     const shape = SHAPES[piece];
     shape.forEach((r, y) => r.forEach((v, x) => {
-        if (v) drawBlock(ctxObj, x + 0.5, y + 0.5, COLORS[piece], 1, 15);
+        if (v) drawBlock(hCtx === ctxObj ? hCtx : nCtx, x + 0.5, y + 0.5, COLORS[piece], 1, 15);
     }));
 }
 
@@ -89,13 +128,6 @@ function drawGhost() {
     current.shape.forEach((r, y) => r.forEach((v, x) => {
         if (v) drawBlock(ctx, g.x + x, g.y + y, COLORS[current.type], 0.2);
     }));
-}
-
-function drawEnemy(d) {
-    eCtx.fillStyle = '#000'; eCtx.fillRect(0,0,eCanvas.width,eCanvas.height);
-    d.board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(eCtx, x, y, c, 1, E_SIZE); }));
-    d.shape.forEach((r,y) => r.forEach((v,x) => { if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, E_SIZE); }));
-    document.getElementById('enemy-score').innerText = d.score;
 }
 
 function collide(b, p) {
