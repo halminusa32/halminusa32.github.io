@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Solo Play - HALRIS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div class="side-panel">
+            <div class="label">HOLD</div>
+            <canvas id="hold-canvas" width="60" height="60"></canvas>
+            <div class="label" style="margin-top:20px;">SCORE</div>
+            <div id="score">0</div>
+        </div>
+
+        <div class="main-panel">
+            <div class="label">SOLO MODE</div>
+            <canvas id="tetris" width="240" height="480"></canvas>
+        </div>
+
+        <div class="side-panel">
+            <div class="label">NEXT</div>
+            <canvas id="next-canvas" width="60" height="180"></canvas>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div class="row">
+            <button id="ctrl-hold">HOLD</button>
+            <button id="ctrl-up">HARD</button>
+            <button id="ctrl-rot-r">ROT</button>
+        </div>
+        <div class="row">
+            <button id="ctrl-left">←</button>
+            <button id="ctrl-down">↓</button>
+            <button id="ctrl-right">→</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
