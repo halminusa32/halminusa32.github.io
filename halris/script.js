@@ -30,7 +30,10 @@ const SHAPES = {
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, score = 0, gameOver = false;
 let holdPiece = null, canHold = true;
-let bag = [], nextPiece = null;
+
+// NEXT管理用のキューと7-bagロジック
+let bag = [];
+let nextQueue = []; 
 
 function refillBag() {
     let pieces = ['i', 'o', 't', 's', 'z', 'j', 'l'];
@@ -41,9 +44,12 @@ function refillBag() {
     bag = [...pieces];
 }
 
-function getNextFromBag() {
-    if (bag.length === 0) refillBag();
-    return bag.pop();
+// NEXTキューを常に5つ以上に保つ（4つ表示＋予備1つ）
+function updateNextQueue() {
+    while (nextQueue.length < 5) {
+        if (bag.length === 0) refillBag();
+        nextQueue.push(bag.pop());
+    }
 }
 
 document.getElementById('btn-p1').onclick = () => join('p1');
@@ -56,81 +62,69 @@ function join(role) {
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
 
-    // 相手のデータを監視
     onValue(ref(db, `games/${roomId}/${enemyId}`), (snap) => {
         const d = snap.val();
-        if(d) {
-            // 受信した瞬間に敵の画面をリフレッシュする
-            drawEnemy(d);
-        }
+        if(d) drawEnemy(d);
     });
 
-    nextPiece = getNextFromBag();
+    updateNextQueue(); // 最初にキューを埋める
     spawn(); 
     update(); 
     setInterval(drop, 1000);
 }
 
-// 同期用関数：iPadの通信を安定させるため、送信前にバリデーション
 function sync() {
     if(!current || !roomId || gameOver) return;
-    const data = { 
-        board: board,
-        pos: { x: current.pos.x, y: current.pos.y }, 
-        shape: current.shape, 
-        type: current.type, 
-        score: score 
-    };
-    set(ref(db, `games/${roomId}/${myId}`), data);
+    set(ref(db, `games/${roomId}/${myId}`), { 
+        board, pos: { x: current.pos.x, y: current.pos.y }, 
+        shape: current.shape, type: current.type, score 
+    });
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op;
     c.fillStyle = color;
-    c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); // 0.5引いて隙間を作る
+    c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5);
     c.globalAlpha = 1;
 }
 
 function drawEnemy(d) {
     if (!eCtx) return;
-    // 描画のたびに背景を真っ黒に塗りつぶして「残像」を消す
     eCtx.fillStyle = '#000';
     eCtx.fillRect(0, 0, eCanvas.width, eCanvas.height);
-    
     const sz = eCanvas.width / 10;
-
-    // 固定ブロック
     if (d.board) {
-        for (let y = 0; y < ROWS; y++) {
-            for (let x = 0; x < COLS; x++) {
-                if (d.board[y] && d.board[y][x]) {
-                    drawBlock(eCtx, x, y, d.board[y][x], 1, sz);
-                }
-            }
-        }
+        d.board.forEach((r, y) => r && r.forEach((c, x) => { if(c) drawBlock(eCtx, x, y, c, 1, sz); }));
     }
-    // 落下中のミノ
     if (d.shape && d.pos) {
-        d.shape.forEach((r, y) => {
-            r.forEach((v, x) => {
-                if (v) {
-                    drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz);
-                }
-            });
-        });
+        d.shape.forEach((r, y) => r.forEach((v, x) => { if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz); }));
     }
-    
     const eScore = document.getElementById('enemy-score');
     if (eScore) eScore.innerText = d.score || 0;
 }
 
-function drawSideCanvas(ctxObj, piece) {
-    ctxObj.clearRect(0, 0, 60, 60);
-    if (!piece) return;
-    const shape = SHAPES[piece];
+// HOLDとNEXTの描画ロジックを分離・強化
+function drawHold() {
+    hCtx.clearRect(0, 0, 60, 60);
+    if (!holdPiece) return;
+    const shape = SHAPES[holdPiece];
     shape.forEach((r, y) => r.forEach((v, x) => {
-        if (v) drawBlock(ctxObj, x + 0.5, y + 0.5, COLORS[piece], 1, 15);
+        if (v) drawBlock(hCtx, x + 0.5, y + 0.5, COLORS[holdPiece], 1, 15);
     }));
+}
+
+function drawNext() {
+    nCtx.clearRect(0, 0, 60, 180);
+    // 上から4つ分を表示
+    for (let i = 0; i < 4; i++) {
+        const type = nextQueue[i];
+        if (!type) continue;
+        const shape = SHAPES[type];
+        shape.forEach((r, y) => r.forEach((v, x) => {
+            // y方向に45ピクセルずつずらして配置
+            if (v) drawBlock(nCtx, x + 0.5, y + 0.5 + (i * 2.8), COLORS[type], 1, 15);
+        }));
+    }
 }
 
 function drawGhost() {
@@ -156,14 +150,17 @@ function collide(b, p) {
 }
 
 function spawn(type = null) {
-    const t = type || nextPiece;
-    if (!type) nextPiece = getNextFromBag();
+    let t;
+    if (type) {
+        t = type;
+    } else {
+        t = nextQueue.shift(); // キューの先頭を使う
+        updateNextQueue();     // 減った分を補充
+    }
     current = { pos:{x:3, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
-    drawSideCanvas(nCtx, nextPiece);
-    if (collide(board, current)) {
-        gameOver = true;
-    }
+    drawNext();
+    if (collide(board, current)) gameOver = true;
     sync();
 }
 
@@ -174,7 +171,7 @@ function hold() {
     if (oldHold) spawn(oldHold);
     else spawn();
     canHold = false;
-    drawSideCanvas(hCtx, holdPiece);
+    drawHold();
     sync();
 }
 
@@ -195,9 +192,7 @@ function drop() {
 
 function hardDrop() {
     if(gameOver || !current) return;
-    while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
-        current.pos.y++;
-    }
+    while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) current.pos.y++;
     drop();
 }
 
@@ -211,9 +206,7 @@ function rotate(dir = 1) {
 }
 
 function update() {
-    // 自分の描画
-    ctx.fillStyle = '#050505'; 
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(ctx, x, y, c); }));
     if(current) {
         drawGhost();
@@ -222,12 +215,10 @@ function update() {
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// キー操作
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
     const key = e.key.toLowerCase();
-    const actionKeys = ['arrowup','arrowdown','arrowleft','arrowright',' ','x','c','z','shift'];
-    if (actionKeys.includes(key)) e.preventDefault();
+    if (['arrowup','arrowdown','arrowleft','arrowright',' ','x','c','z','shift'].includes(key)) e.preventDefault();
     if (key === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); }
     if (key === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); }
     if (key === 'arrowdown') drop();
@@ -237,13 +228,9 @@ document.addEventListener('keydown', e => {
     if (key === 'c' || key === 'shift') hold();
 });
 
-// スマホ操作
 const touch = (id, fn) => {
     const el = document.getElementById(id);
-    if(el) el.addEventListener('touchstart', (e) => { 
-        e.preventDefault(); 
-        if(!gameOver && current) fn(); 
-    }, {passive:false});
+    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
 };
 touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); });
 touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); });
