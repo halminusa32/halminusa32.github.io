@@ -32,6 +32,10 @@ let current = null, score = 0, gameOver = false;
 let holdPiece = null, canHold = true;
 let bag = [], nextQueue = [];
 
+// 【新規】接地猶予のための変数
+let lockTimer = null;
+const LOCK_DELAY = 500; // 地面に触れてから固定されるまでのミリ秒（0.5秒）
+
 function refillBag() {
     let pieces = ['i', 'o', 't', 's', 'z', 'j', 'l'];
     for (let i = pieces.length - 1; i > 0; i--) {
@@ -42,7 +46,7 @@ function refillBag() {
 }
 
 function updateNextQueue() {
-    while (nextQueue.length < 6) {
+    while (nextQueue.length < 5) {
         if (bag.length === 0) refillBag();
         nextQueue.push(bag.pop());
     }
@@ -58,83 +62,68 @@ function join(role) {
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
 
-    // 相手のデータを監視。届いたら即描画。
     onValue(ref(db, `games/${roomId}/${enemyId}`), (snap) => {
         const d = snap.val();
         if(d) drawEnemy(d);
     });
 
     updateNextQueue();
-    spawn();
-    update();
-    setInterval(drop, 1000);
+    spawn(); update(); setInterval(drop, 1000);
 }
 
 function sync() {
     if(!current || !roomId || gameOver) return;
+    const boardCopy = JSON.parse(JSON.stringify(board));
     set(ref(db, `games/${roomId}/${myId}`), { 
-        board: board,
-        pos: current.pos, 
-        shape: current.shape, 
-        type: current.type, 
-        score: score 
+        board: boardCopy, pos: { x: current.pos.x, y: current.pos.y }, 
+        shape: current.shape, type: current.type, score 
     });
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op;
     c.fillStyle = color;
-    c.fillRect(x * sz, y * sz, sz - 0.8, sz - 0.8);
+    c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5);
     c.globalAlpha = 1;
 }
 
 function drawEnemy(d) {
     if (!eCtx) return;
-    eCtx.clearRect(0, 0, eCanvas.width, eCanvas.height);
     eCtx.fillStyle = '#000';
     eCtx.fillRect(0, 0, eCanvas.width, eCanvas.height);
-    
     const sz = eCanvas.width / 10;
     if (d.board) {
-        d.board.forEach((r, y) => r && r.forEach((c, x) => {
-            if(c) drawBlock(eCtx, x, y, c, 1, sz);
-        }));
+        d.board.forEach((r, y) => { if(r) r.forEach((c, x) => { if(c) drawBlock(eCtx, x, y, c, 1, sz); }); });
     }
     if (d.shape && d.pos) {
-        d.shape.forEach((r, y) => r.forEach((v, x) => {
-            if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz);
-        }));
+        d.shape.forEach((r, y) => r.forEach((v, x) => { if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz); }));
     }
-    document.getElementById('enemy-score').innerText = d.score || 0;
+    const eScore = document.getElementById('enemy-score');
+    if (eScore) eScore.innerText = d.score || 0;
 }
 
-function drawSideCanvases() {
-    // HOLD
+function drawHold() {
     hCtx.clearRect(0, 0, 60, 60);
-    if (holdPiece) {
-        SHAPES[holdPiece].forEach((r, y) => r.forEach((v, x) => {
-            if (v) drawBlock(hCtx, x + 0.5, y + 0.5, COLORS[holdPiece], 1, 15);
-        }));
-    }
-    // NEXT (4つ表示)
+    if (!holdPiece) return;
+    const shape = SHAPES[holdPiece];
+    shape.forEach((r, y) => r.forEach((v, x) => { if (v) drawBlock(hCtx, x + 0.5, y + 0.5, COLORS[holdPiece], 1, 15); }));
+}
+
+function drawNext() {
     nCtx.clearRect(0, 0, 60, 180);
     for (let i = 0; i < 4; i++) {
         const type = nextQueue[i];
         if (!type) continue;
-        SHAPES[type].forEach((r, y) => r.forEach((v, x) => {
-            if (v) drawBlock(nCtx, x + 0.5, y + 0.5 + (i * 2.8), COLORS[type], 1, 15);
-        }));
+        const shape = SHAPES[type];
+        shape.forEach((r, y) => r.forEach((v, x) => { if (v) drawBlock(nCtx, x + 0.5, y + 0.5 + (i * 2.8), COLORS[type], 1, 15); }));
     }
 }
 
-function spawn(type = null) {
-    let t = type || nextQueue.shift();
-    updateNextQueue();
-    current = { pos:{x:3, y:0}, shape:SHAPES[t], type:t };
-    canHold = true;
-    drawSideCanvases();
-    if (collide(board, current)) gameOver = true;
-    sync();
+function drawGhost() {
+    if (!current) return;
+    let g = { ...current.pos };
+    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
+    current.shape.forEach((r, y) => r.forEach((v, x) => { if (v) drawBlock(ctx, g.x + x, g.y + y, COLORS[current.type], 0.2); }));
 }
 
 function collide(b, p) {
@@ -150,6 +139,18 @@ function collide(b, p) {
     return false;
 }
 
+function spawn(type = null) {
+    clearTimeout(lockTimer); // タイマー解除
+    lockTimer = null;
+    let t = type || nextQueue.shift();
+    updateNextQueue();
+    current = { pos:{x:3, y:0}, shape:SHAPES[t], type:t };
+    canHold = true;
+    drawNext();
+    if (collide(board, current)) gameOver = true;
+    sync();
+}
+
 function hold() {
     if (!canHold || gameOver) return;
     const oldHold = holdPiece;
@@ -157,7 +158,16 @@ function hold() {
     if (oldHold) spawn(oldHold);
     else spawn();
     canHold = false;
+    drawHold();
     sync();
+}
+
+// 【改善】接地タイマーのリセット関数
+function resetLockTimer() {
+    if (lockTimer) {
+        clearTimeout(lockTimer);
+        lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+    }
 }
 
 function drop() {
@@ -165,20 +175,43 @@ function drop() {
     current.pos.y++;
     if (collide(board, current)) {
         current.pos.y--;
-        current.shape.forEach((r,y) => r.forEach((v,x) => {
-            if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
-        }));
-        board = board.filter(r => !r.every(v => v !== null));
-        while (board.length < ROWS) board.unshift(Array(COLS).fill(null));
-        score += 100; spawn();
+        // 接地した瞬間にタイマーがなければ開始
+        if (!lockTimer) {
+            lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+        }
+        return;
     }
     sync();
 }
 
+// 【改善】実際にミノを固める処理を分離
+function lockPiece() {
+    if (!current || gameOver) return;
+    // 最後に衝突チェック（猶予中に動いて地面がなくなった場合はキャンセル）
+    if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
+        lockTimer = null;
+        return;
+    }
+
+    current.shape.forEach((r,y) => r.forEach((v,x) => {
+        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
+    }));
+
+    let newBoard = board.filter(r => !r.every(v => v !== null));
+    let linesCleared = ROWS - newBoard.length;
+    while (newBoard.length < ROWS) newBoard.unshift(Array(COLS).fill(null));
+    
+    board = newBoard;
+    score += linesCleared * 100;
+    spawn();
+}
+
 function hardDrop() {
     if(gameOver || !current) return;
-    while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) current.pos.y++;
-    drop();
+    while(!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
+        current.pos.y++;
+    }
+    lockPiece(); // ハードドロップは即固定
 }
 
 function rotate(dir = 1) {
@@ -186,34 +219,41 @@ function rotate(dir = 1) {
     const prev = current.shape;
     if(dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
-    if (collide(board, current)) current.shape = prev;
-    sync();
+    
+    if (collide(board, current)) {
+        current.shape = prev;
+    } else {
+        resetLockTimer(); // 【改善】回転できたら猶予をリセット
+        sync();
+    }
 }
 
 function update() {
     ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y) => r.forEach((c,x) => { if(c) drawBlock(ctx, x, y, c); }));
     if(current) {
-        // GHOST
-        let g = { ...current.pos };
-        while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
-        current.shape.forEach((r, y) => r.forEach((v, x) => {
-            if (v) drawBlock(ctx, g.x + x, g.y + y, COLORS[current.type], 0.2);
-        }));
-        // ミノ本体
+        drawGhost();
         current.shape.forEach((r,y) => r.forEach((v,x) => { if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }));
     }
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// 操作系
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
     const key = e.key.toLowerCase();
     if (['arrowup','arrowdown','arrowleft','arrowright',' ','x','c','z','shift'].includes(key)) e.preventDefault();
-    if (key === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); }
-    if (key === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); }
-    if (key === 'arrowdown') drop();
+    
+    if (key === 'arrowleft') { 
+        current.pos.x--; 
+        if(collide(board,current)) current.pos.x++; 
+        else { resetLockTimer(); sync(); } // 【改善】移動できたら猶予をリセット
+    }
+    if (key === 'arrowright') { 
+        current.pos.x++; 
+        if(collide(board,current)) current.pos.x--; 
+        else { resetLockTimer(); sync(); } // 【改善】移動できたら猶予をリセット
+    }
+    if (key === 'arrowdown') drop(); // ソフドロ
     if (key === 'arrowup' || key === 'x') rotate(1);
     if (key === 'z') rotate(-1);
     if (key === ' ') hardDrop();
@@ -224,8 +264,8 @@ const touch = (id, fn) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
 };
-touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); });
-touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); });
+touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; else { resetLockTimer(); sync(); } });
+touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; else { resetLockTimer(); sync(); } });
 touch('ctrl-down', drop);
 touch('ctrl-up', hardDrop);
 touch('ctrl-rot-r', () => rotate(1));
