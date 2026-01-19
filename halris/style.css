@@ -1,0 +1,132 @@
+:root {
+    --bg-color: #0a0a0a;
+    --text-color: #ffffff;
+    --solo-color: #2ecc71;
+    --multi-color: #3498db;
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --hover-border-color: rgba(255, 255, 255, 0.5);
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden; /* 背景アニメーションがはみ出さないように */
+    position: relative; /* background-animの基準にする */
+}
+
+/* --- 背景アニメーション --- */
+.background-anim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); /* グラデーション */
+    background-size: 400% 400%; /* 大きくしてアニメーションで動かす */
+    animation: gradient-anim 15s ease infinite; /* グラデーションのアニメーション */
+    opacity: 0.2; /* 薄くする */
+    z-index: -1; /* 最背面に配置 */
+}
+
+@keyframes gradient-anim {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* --- メインコンテンツ --- */
+.main-content {
+    text-align: center;
+    z-index: 1; /* 背景アニメーションより手前に */
+}
+
+h1.title-anim {
+    font-size: 3rem;
+    letter-spacing: 0.5rem;
+    margin-bottom: 3rem;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    opacity: 0; /* 初期非表示 */
+    animation: slide-in 1s ease-out forwards; /* スライドインアニメーション */
+}
+
+@keyframes slide-in {
+    0% { transform: translateY(-50px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.container {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.mode-card {
+    width: 280px;
+    height: 180px;
+    text-decoration: none;
+    color: white;
+    border: 2px solid var(--border-color);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    background: var(--card-bg);
+    backdrop-filter: blur(5px); /* 背景のぼかし効果 */
+    opacity: 0; /* 初期非表示 */
+    transform: translateY(20px); /* 初期位置を下げる */
+    animation: fade-in-up 0.6s ease-out forwards; /* フェードイン＆スライドアップ */
+}
+
+/* カードの遅延アニメーション */
+.fade-in-delay1 { animation-delay: 0.8s; } /* H1の後に少し遅れて */
+.fade-in-delay2 { animation-delay: 1.2s; } /* さらに遅れて */
+
+
+@keyframes fade-in-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.mode-card:hover {
+    transform: translateY(-10px);
+    border-color: var(--hover-border-color);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
+}
+
+.mode-card.solo:hover { background: var(--solo-color); }
+.mode-card.multi:hover { background: var(--multi-color); }
+
+.icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.card-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.desc {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    margin-top: 5px;
+}
+
+/* iPad/Mobile用調整 */
+@media (max-width: 600px) {
+    h1.title-anim { font-size: 2rem; margin-bottom: 2rem; }
+    .mode-card { width: 85vw; height: 160px; }
+    .container { flex-direction: column; gap: 20px; }
+}
