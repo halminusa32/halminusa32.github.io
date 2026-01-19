@@ -62,24 +62,31 @@ function join(role) {
 
     onValue(ref(db, `games/${roomId}/${enemyId}`), (snap) => {
         const d = snap.val();
-        if(d) drawEnemy(d);
+        // ガード：データが完全な時だけ描き直す
+        if(d && d.board && d.board.length === ROWS) {
+            drawEnemy(d);
+        }
     });
 
     updateNextQueue();
-    spawn(); update(); setInterval(drop, 1000);
+    spawn(); 
+    sync(); // 初回の盤面を強制同期
+    update(); 
+    setInterval(drop, 1000);
 }
 
 function sync() {
     if(!current || !roomId || gameOver) return;
-    // 不完全なデータを送らないよう、盤面を深くコピー
-    const boardData = board.map(row => [...row]);
-    set(ref(db, `games/${roomId}/${myId}`), { 
-        board: boardData, 
-        pos: { x: current.pos.x, y: current.pos.y }, 
-        shape: current.shape, 
-        type: current.type, 
-        score: score 
-    });
+    try {
+        const boardData = board.map(row => row.map(cell => cell)); // 深いコピー
+        set(ref(db, `games/${roomId}/${myId}`), { 
+            board: boardData, 
+            pos: { x: current.pos.x, y: current.pos.y }, 
+            shape: current.shape, 
+            type: current.type, 
+            score: score 
+        });
+    } catch (e) { console.error("Sync Error", e); }
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
@@ -90,18 +97,20 @@ function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
 }
 
 function drawEnemy(d) {
-    if (!eCtx || !d) return;
-    // 盤面データが壊れている(20行ない)場合は描画をスキップ
-    if (!d.board || d.board.length < ROWS) return;
-
+    if (!eCtx) return;
+    // 塗りつぶす前に一度消去
+    eCtx.clearRect(0, 0, eCanvas.width, eCanvas.height);
     eCtx.fillStyle = '#000';
     eCtx.fillRect(0, 0, eCanvas.width, eCanvas.height);
+    
     const sz = eCanvas.width / 10;
 
+    // 盤面の描画
     d.board.forEach((r, y) => {
         if(r) r.forEach((c, x) => { if(c) drawBlock(eCtx, x, y, c, 1, sz); });
     });
 
+    // 落下中ミノの描画
     if (d.shape && d.pos) {
         d.shape.forEach((r, y) => r.forEach((v, x) => {
             if(v) drawBlock(eCtx, d.pos.x + x, d.pos.y + y, COLORS[d.type], 1, sz);
@@ -163,7 +172,7 @@ function spawn(type = null) {
     canHold = true;
     drawNext();
     if (collide(board, current)) gameOver = true;
-    sync();
+    // sync() はここで行わず、呼び出し元で盤面確定後に行う
 }
 
 function hold() {
@@ -197,27 +206,28 @@ function drop() {
 
 function lockPiece() {
     if (!current || gameOver) return;
-    // 接地猶予中に空中に移動した場合はキャンセル
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
         lockTimer = null;
         return;
     }
 
+    // 1. 固定
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
     }));
 
-    // ライン消去を完了させてから代入
-    let nextBoard = board.filter(r => !r.every(v => v !== null));
-    let linesCleared = ROWS - nextBoard.length;
-    while (nextBoard.length < ROWS) nextBoard.unshift(Array(COLS).fill(null));
+    // 2. ライン消去と盤面再構築
+    let nextB = board.filter(r => r.some(c => c === null));
+    let cleared = ROWS - nextB.length;
+    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    board = nextB; // ここで盤面を確定
     
-    board = nextBoard;
-    score += linesCleared * 100;
-
+    score += cleared * 100;
     clearTimeout(lockTimer);
     lockTimer = null;
-    spawn();
+
+    spawn(); // 次のミノをセット
+    sync();  // 確定した盤面と新しいミノをセットで送信
 }
 
 function hardDrop() {
