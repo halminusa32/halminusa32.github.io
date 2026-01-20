@@ -1,5 +1,5 @@
-alert("JS読み込み成功！"); // これが画面に出れば、JS自体は読み込めています
-console.log("Solo script start");
+// 冒頭に生存確認用のアラート（動いたら消してOK）
+console.log("Solo script loaded");
 
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
@@ -16,14 +16,7 @@ let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, score = 0, gameOver = false;
 let holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null;
-const LOCK_DELAY = 500; // 接地猶予（0.5秒）
-
-function init() {
-    updateNextQueue();
-    spawn();
-    update();
-    setInterval(drop, 1000);
-}
+const LOCK_DELAY = 500;
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
@@ -86,53 +79,31 @@ function lockPiece() {
     clearTimeout(lockTimer); lockTimer = null; spawn();
 }
 
-function hardDrop() { 
-    if(gameOver || !current) return; 
-    while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
-    lockPiece(); 
-}
+function hardDrop() { if(gameOver || !current) return; while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
 
 function rotate(dir) {
-    if(gameOver || !current) return;
     const prev = current.shape;
     if(dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
-    
-    if (collide(board, current)) {
-        current.shape = prev;
-    } else {
-        // 回転に成功したら接地猶予を更新
-        if(lockTimer){ clearTimeout(lockTimer); lockTimer=setTimeout(lockPiece, LOCK_DELAY); }
-    }
+    if (collide(board, current)) current.shape = prev;
+    else if(lockTimer){ clearTimeout(lockTimer); lockTimer=setTimeout(lockPiece, LOCK_DELAY); }
 }
 
-function hold() { 
-    if(!canHold || gameOver) return; 
-    let t = holdPiece; 
-    holdPiece = current.type; 
-    if(t) spawn(t); else spawn(); 
-    canHold = false; 
-}
+function hold() { if(!canHold || gameOver) return; let t = holdPiece; holdPiece = current.type; if(t) spawn(t); else spawn(); canHold = false; }
 
 function drawNext() {
     nCtx.clearRect(0,0,60,180);
-    for(let i=0; i<4; i++) {
-        let type = nextQueue[i];
-        SHAPES[type].forEach((r,y)=>r.forEach((v,x)=>{ 
-            if(v) drawBlock(nCtx, x+0.5, y+0.5+(i*2.8), COLORS[type], 1, 15); 
-        }));
-    }
+    for(let i=0; i<4; i++) SHAPES[nextQueue[i]].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx,x+0.5,y+0.5+(i*2.8),COLORS[nextQueue[i]],1,15); }));
 }
 
 function drawHold() {
     hCtx.clearRect(0,0,60,60);
-    if(holdPiece) SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x+0.5, y+0.5, COLORS[holdPiece], 1, 15); }));
+    if(holdPiece) SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx,x+0.5,y+0.5,COLORS[holdPiece],1,15); }));
 }
 
 function drawGhost() {
-    if(!current) return;
     let g = { ...current.pos }; while(!collide(board,{pos:{x:g.x,y:g.y+1},shape:current.shape})) g.y++;
-    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
+    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx,g.x+x,g.y+y,COLORS[current.type],0.2); }));
 }
 
 function update() {
@@ -145,9 +116,8 @@ function update() {
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
     const k = e.key.toLowerCase();
-    if (['arrowup','arrowdown','arrowleft','arrowright',' ','x','c','z','shift'].includes(k)) e.preventDefault();
-    if(k === 'arrowleft'){ current.pos.x--; if(collide(board,current)) current.pos.x++; else if(lockTimer){clearTimeout(lockTimer); lockTimer=setTimeout(lockPiece,LOCK_DELAY);} }
-    if(k === 'arrowright'){ current.pos.x++; if(collide(board,current)) current.pos.x--; else if(lockTimer){clearTimeout(lockTimer); lockTimer=setTimeout(lockPiece,LOCK_DELAY);} }
+    if(k === 'arrowleft'){ current.pos.x--; if(collide(board,current)) current.pos.x++; }
+    if(k === 'arrowright'){ current.pos.x++; if(collide(board,current)) current.pos.x--; }
     if(k === 'arrowdown') drop();
     if(k === 'arrowup' || k === 'x') rotate(1);
     if(k === 'z') rotate(-1);
@@ -160,4 +130,5 @@ touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.p
 touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; });
 touch('ctrl-down', drop); touch('ctrl-up', hardDrop); touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
 
-init();
+// 開始
+updateNextQueue(); spawn(); update(); setInterval(drop, 1000);
