@@ -1,112 +1,20 @@
-:root {
-    --bg-color: #111;
-    --panel-bg: #222;
-    --text-color: #eee;
-    --border-color: #444;
-}
+body { background: #000; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; }
+#room-setup { background: #111; padding: 30px; border-radius: 12px; border: 2px solid #333; text-align: center; }
+#game-container { display: flex; gap: 10px; background: #111; padding: 10px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
+.player-section { display: flex; flex-direction: column; align-items: center; }
+.side { width: 70px; }
+canvas { background: #050505; border: 1px solid #333; }
+#hold-canvas, #next-canvas { background: #000; border: 1px solid #222; }
+#enemy-tetris { opacity: 0.5; background: #000; }
+.label { font-size: 10px; color: #888; margin-bottom: 3px; text-transform: uppercase; }
+.value { font-size: 14px; color: #fff; }
 
-body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    overflow: hidden;
-    touch-action: none; /* iPadのスクロール防止 */
-}
+.touch-controls { display: none; margin-top: 10px; flex-direction: column; gap: 8px; }
+@media (max-width: 750px) { #game-container { scale: 0.75; } .touch-controls { display: flex; } }
 
-#game-container {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
-    padding: 10px;
-    background: var(--panel-bg);
-    border-radius: 15px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
-
-.main-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-canvas {
-    border: 2px solid var(--border-color);
-    background-color: #000;
-}
-
-#tetris {
-    width: 240px;
-    height: 480px;
-}
-
-.side-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 80px;
-}
-
-.label {
-    font-size: 14px;
-    font-weight: bold;
-    color: #888;
-    margin-bottom: 5px;
-    text-transform: uppercase;
-}
-
-#score {
-    font-size: 24px;
-    font-weight: bold;
-    color: #fff;
-    margin-bottom: 10px;
-}
-
-/* コントローラー（iPad/スマホ用） */
-#controls {
-    margin-top: 25px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.row {
-    display: flex;
-    gap: 12px;
-}
-
-button {
-    width: 75px;
-    height: 65px;
-    font-size: 16px;
-    font-weight: bold;
-    background: #333;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    box-shadow: 0 4px #1a1a1a;
-    transition: all 0.1s;
-    -webkit-tap-highlight-color: transparent;
-}
-
-button:active {
-    box-shadow: 0 0 #1a1a1a;
-    transform: translateY(4px);
-    background: #444;
-}
-
-#ctrl-up { background: #555; } /* HARD DROP */
-#ctrl-hold { background: #444; }
-
-/* 小さい画面（iPhone等）向けの微調整 */
-@media (max-width: 500px) {
-    #game-container { gap: 10px; }
-    #tetris { width: 200px; height: 400px; }
-    button { width: 65px; height: 60px; font-size: 14px; }
-}
+.control-row { display: flex; justify-content: center; gap: 10px; }
+.btn { width: 60px; height: 60px; border-radius: 50%; border: none; background: #333; color: #fff; font-weight: bold; cursor: pointer; }
+.blue { background: #007bff; width: 130px; border-radius: 10px; }
+.purple { background: #6f42c1; }
+.gray { width: 80px; border-radius: 10px; font-size: 14px; }
+.btn:active { background: #555; }
