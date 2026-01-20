@@ -166,7 +166,4 @@ function init() {
 }
 
 // ブラウザが画面の準備を100%終えた瞬間に init() を呼び出す
-window.onload = () => {
-    init();
-};
-
+window.onload = init;
