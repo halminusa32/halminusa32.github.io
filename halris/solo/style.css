@@ -1,71 +1,112 @@
+:root {
+    --bg-color: #111;
+    --panel-bg: #222;
+    --text-color: #eee;
+    --border-color: #444;
+}
+
 body {
-    background: #111;
-    color: white;
-    font-family: sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100vh;
-    margin: 0;
     overflow: hidden;
-    touch-action: none;
+    touch-action: none; /* iPadのスクロール防止 */
 }
 
 #game-container {
     display: flex;
-    gap: 15px;
+    gap: 20px;
     align-items: flex-start;
+    padding: 10px;
+    background: var(--panel-bg);
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+.main-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 canvas {
-    border: 2px solid #444;
-    background: #000;
+    border: 2px solid var(--border-color);
+    background-color: #000;
+}
+
+#tetris {
+    width: 240px;
+    height: 480px;
 }
 
 .side-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 70px;
+    width: 80px;
 }
 
 .label {
-    font-size: 12px;
-    color: #aaa;
+    font-size: 14px;
+    font-weight: bold;
+    color: #888;
     margin-bottom: 5px;
+    text-transform: uppercase;
 }
 
 #score {
-    font-size: 20px;
+    font-size: 24px;
     font-weight: bold;
+    color: #fff;
+    margin-bottom: 10px;
 }
 
+/* コントローラー（iPad/スマホ用） */
 #controls {
-    margin-top: 20px;
+    margin-top: 25px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .row {
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }
 
 button {
-    width: 70px;
-    height: 60px;
+    width: 75px;
+    height: 65px;
     font-size: 16px;
+    font-weight: bold;
     background: #333;
     color: white;
     border: none;
-    border-radius: 8px;
-    font-weight: bold;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px #1a1a1a;
+    transition: all 0.1s;
+    -webkit-tap-highlight-color: transparent;
 }
 
-button:active { background: #666; }
+button:active {
+    box-shadow: 0 0 #1a1a1a;
+    transform: translateY(4px);
+    background: #444;
+}
 
-@media (max-width: 600px) {
-    button { width: 60px; height: 55px; }
+#ctrl-up { background: #555; } /* HARD DROP */
+#ctrl-hold { background: #444; }
+
+/* 小さい画面（iPhone等）向けの微調整 */
+@media (max-width: 500px) {
+    #game-container { gap: 10px; }
+    #tetris { width: 200px; height: 400px; }
+    button { width: 65px; height: 60px; font-size: 14px; }
 }
