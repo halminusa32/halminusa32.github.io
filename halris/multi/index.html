@@ -8,13 +8,16 @@
 </head>
 <body>
     <h1>HALRIS ONLINE</h1>
+    
     <div id="room-setup">
-        <input type="text" id="room-id" placeholder="招待コードを入力">
+        <p style="margin-bottom: 20px; font-size: 18px;">プレイする？</p>
         <div class="join-buttons">
-            <button id="btn-p1" class="btn gray">1P</button>
-            <button id="btn-p2" class="btn gray">2P</button>
+            <button id="btn-p1" class="btn gray">はい</button>
+            <button id="btn-p2" class="btn gray">はい</button>
         </div>
+        <p style="font-size: 10px; color: #555; margin-top: 10px;">※左が1P、右が2Pとして参加します</p>
     </div>
+
     <div id="game-container" style="display: none;">
         <div class="player-section side">
             <div class="label">HOLD</div>
@@ -34,6 +37,7 @@
             <div id="enemy-score" class="value">0</div>
         </div>
     </div>
+
     <div class="touch-controls">
         <div class="control-row">
             <button id="ctrl-hold" class="btn gray" style="width:80px">HOLD</button>
@@ -49,6 +53,7 @@
             </div>
         </div>
     </div>
+
     <script type="module" src="script.js"></script>
 </body>
 </html>
