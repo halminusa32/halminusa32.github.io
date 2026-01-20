@@ -1,3 +1,6 @@
+alert("JS読み込み成功！"); // これが画面に出れば、JS自体は読み込めています
+console.log("Solo script start");
+
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
