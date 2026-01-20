@@ -130,5 +130,32 @@ touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.p
 touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; });
 touch('ctrl-down', drop); touch('ctrl-up', hardDrop); touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
 
-// 開始
-updateNextQueue(); spawn(); update(); setInterval(drop, 1000);
+// ゲームの初期化と開始をまとめる関数
+function init() {
+    console.log("Initializing Game...");
+    
+    // 1. データの初期化
+    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    score = 0;
+    gameOver = false;
+    holdPiece = null;
+    canHold = true;
+    bag = [];
+    nextQueue = [];
+
+    // 2. 最初のセットアップ
+    refillBag();
+    updateNextQueue();
+    spawn();
+
+    // 3. 描画開始
+    update();
+
+    // 4. 落下タイマー開始
+    setInterval(() => {
+        if (!gameOver) drop();
+    }, 1000);
+}
+
+// 画面が完全に読み込まれたら init を実行する
+window.onload = init;
