@@ -130,11 +130,13 @@ touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.p
 touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; });
 touch('ctrl-down', drop); touch('ctrl-up', hardDrop); touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
 
-// ゲームの初期化と開始をまとめる関数
+// --- 133行目以降をこれに書き換え ---
+
+// 全てをリセットしてゲームを開始する関数
 function init() {
-    console.log("Initializing Game...");
+    console.log("Game Init Start");
     
-    // 1. データの初期化
+    // 1. 変数の初期化
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     score = 0;
     gameOver = false;
@@ -143,19 +145,28 @@ function init() {
     bag = [];
     nextQueue = [];
 
-    // 2. 最初のセットアップ
+    // 2. 最初のミノを準備
     refillBag();
     updateNextQueue();
     spawn();
 
-    // 3. 描画開始
+    // 3. 描画ループを開始
     update();
 
-    // 4. 落下タイマー開始
-    setInterval(() => {
-        if (!gameOver) drop();
+    // 4. 自動落下タイマー（1秒ごと）
+    // setIntervalの戻り値を保持しておくと管理が楽になります
+    const gameInterval = setInterval(() => {
+        if (!gameOver) {
+            drop();
+        } else {
+            clearInterval(gameInterval);
+            alert("GAME OVER! SCORE: " + score);
+        }
     }, 1000);
 }
 
-// 画面が完全に読み込まれたら init を実行する
-window.onload = init;
+// ブラウザが画面の準備を100%終えた瞬間に init() を呼び出す
+window.onload = () => {
+    init();
+};
+
