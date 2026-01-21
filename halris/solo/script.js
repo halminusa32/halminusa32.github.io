@@ -54,63 +54,8 @@ function spawn(type = null) {
     current = { pos:{x:startX, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
     drawNext(); drawHold();
-    
-    if (collide(board, current)) {
-        finishGame();
-        return;
-    }
+    if (collide(board, current)) { gameOver = true; showGameOver(); }
     sync();
-}
-
-function lockPiece() {
-    if (!current || gameOver) return;
-    current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
-    }));
-
-    // 中開けREN対策：上部4行の中央4列にブロックがあるか判定
-    for (let y = 0; y <= 3; y++) {
-        for (let x = 3; x <= 6; x++) {
-            if (board[y][x] !== null) {
-                finishGame();
-                return;
-            }
-        }
-    }
-
-    let nextB = board.filter(r => r.some(c => c === null));
-    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB;
-    clearTimeout(lockTimer); lockTimer = null;
-    spawn();
-}
-
-function finishGame() {
-    gameOver = true;
-    clearInterval(gameInterval);
-    document.getElementById('game-over-screen').style.display = 'flex';
-}
-
-function resetGame() {
-    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false;
-    holdPiece = null;
-    canHold = true;
-    bag = [];
-    nextQueue = [];
-    clearTimeout(lockTimer);
-    if (gameInterval) clearInterval(gameInterval);
-    
-    document.getElementById('game-over-screen').style.display = 'none';
-    refillBag();
-    updateNextQueue();
-    spawn();
-    update();
-    gameInterval = setInterval(drop, 1000);
-}
-
-function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
-    c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
 }
 
 function collide(b, p) {
@@ -125,32 +70,52 @@ function collide(b, p) {
     return false;
 }
 
-function drawGhost() {
-    if (!current) return;
-    let g = { ...current.pos };
-    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
-    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
-}
-
+// --- SRS完全版 回転処理 ---
 function rotate(dir = 1) {
     if (gameOver || !current) return;
-    const prevS = current.shape, prevP = { ...current.pos };
+    const prevShape = current.shape;
+    const prevPos = { ...current.pos };
+
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
 
-    const moveX = [0, -1, 1, 0, -1, 1, -2, 2, 0, 0], moveY = [0, 0, 0, 1, 1, 1, 0, 0, 2, -1];
-    let ok = false;
-    for (let i = 0; i < moveX.length; i++) {
-        current.pos.x = prevP.x + moveX[i]; current.pos.y = prevP.y + moveY[i];
-        if (!collide(board, current)) { ok = true; break; }
+    // TDテンプレ対応の強力キックデータ
+    const kicks = [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2], [1,0], [1,1], [0,2], [1,2]];
+    
+    let success = false;
+    for (let k of kicks) {
+        current.pos.x = prevPos.x + k[0];
+        current.pos.y = prevPos.y + k[1];
+        if (!collide(board, current)) { success = true; break; }
     }
-    if (!ok) { current.shape = prevS; current.pos = prevP; }
+
+    if (!success) { current.shape = prevShape; current.pos = prevPos; }
     else {
         if (collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
             if (lockTimer) { clearTimeout(lockTimer); lockTimer = setTimeout(lockPiece, LOCK_DELAY); }
         }
         sync();
     }
+}
+
+function lockPiece() {
+    if (!current || gameOver) return;
+    current.shape.forEach((r,y) => r.forEach((v,x) => {
+        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
+    }));
+
+    // 中央4列の窒息判定
+    for (let y = 0; y <= 3; y++) {
+        for (let x = 3; x <= 6; x++) {
+            if (board[y][x] !== null) { showGameOver(); return; }
+        }
+    }
+
+    let nextB = board.filter(r => r.some(c => c === null));
+    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    board = nextB;
+    clearTimeout(lockTimer); lockTimer = null;
+    spawn();
 }
 
 function drop() {
@@ -169,19 +134,30 @@ function hold() {
     canHold = false; drawHold();
 }
 
+function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
+    c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
+}
+
+function drawGhost() {
+    if (!current) return;
+    let g = { ...current.pos };
+    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
+    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
+}
+
 function drawHold() {
     hCtx.clearRect(0,0,60,60);
     if (!holdPiece) return;
-    const off = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
-    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x + off, y + 1, COLORS[holdPiece], 1, 15); }));
+    const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
+    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15); }));
 }
 
 function drawNext() {
     nCtx.clearRect(0,0,60,180);
     for(let i=0; i<4; i++) {
         let t = nextQueue[i];
-        const off = (t === 'i' || t === 'o') ? 0.5 : 1;
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x + off, y + 1 + (i * 3), COLORS[t], 1, 15); }));
+        const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
+        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x+offX, y+1+(i*3), COLORS[t], 1, 15); }));
     }
 }
 
@@ -192,18 +168,31 @@ function update() {
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// イベント登録
+function showGameOver() {
+    gameOver = true;
+    clearInterval(gameInterval);
+    document.getElementById('game-over-screen').style.display = 'flex';
+}
+
+function resetGame() {
+    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    gameOver = false; holdPiece = null; canHold = true; bag = []; nextQueue = [];
+    document.getElementById('room-setup').style.display = 'none';
+    document.getElementById('game-over-screen').style.display = 'none';
+    document.getElementById('game-container').style.display = 'flex';
+    if (gameInterval) clearInterval(gameInterval);
+    refillBag(); updateNextQueue(); spawn(); update();
+    gameInterval = setInterval(drop, 1000);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('play').onclick = () => {
-        document.getElementById('room-setup').style.display = 'none';
-        document.getElementById('game-container').style.display = 'flex';
-        resetGame();
-    };
+    document.getElementById('play').onclick = resetGame;
     document.getElementById('restart-button').onclick = resetGame;
 });
 
+// 操作系
 document.addEventListener('keydown', e => {
-    if(!current || gameOver) return;
+    if(gameOver || !current) return;
     const k = e.key.toLowerCase();
     if (k === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; else sync(); }
     if (k === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; else sync(); }
