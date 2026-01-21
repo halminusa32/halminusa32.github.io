@@ -54,7 +54,7 @@ function spawn(type = null) {
     current = { pos:{x:startX, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
     drawNext(); drawHold();
-    if (collide(board, current)) { gameOver = true; showGameOver(); }
+    if (collide(board, current)) { showGameOver(); }
     sync();
 }
 
@@ -70,17 +70,23 @@ function collide(b, p) {
     return false;
 }
 
-// --- SRS完全版 回転処理 ---
+// --- TSTねじ込み対応 SRS強化版 ---
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
 
+    // 形状回転
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
 
-    // TDテンプレ対応の強力キックデータ
-    const kicks = [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2], [1,0], [1,1], [0,2], [1,2]];
+    // キックパターン（TDテンプレの「浮き」と「沈み」に特化）
+    const kicks = [
+        [0,0], [-1,0], [1,0],  // 基本
+        [0,1], [-1,1], [1,1],  // 下方向へのねじ込み（TST用）
+        [0,-1], [-1,-1], [1,-1], // 上方向（浮き）
+        [-2,0], [2,0], [0,2]   // 大きな移動
+    ];
     
     let success = false;
     for (let k of kicks) {
@@ -91,6 +97,7 @@ function rotate(dir = 1) {
 
     if (!success) { current.shape = prevShape; current.pos = prevPos; }
     else {
+        // 接地判定があればタイマーをリセットして操作猶予（Infinity）を与える
         if (collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
             if (lockTimer) { clearTimeout(lockTimer); lockTimer = setTimeout(lockPiece, LOCK_DELAY); }
         }
@@ -104,7 +111,7 @@ function lockPiece() {
         if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
     }));
 
-    // 中央4列の窒息判定
+    // 真ん中4列（x:3-6）が盤面外（y<4）に溢れたらゲームオーバー
     for (let y = 0; y <= 3; y++) {
         for (let x = 3; x <= 6; x++) {
             if (board[y][x] !== null) { showGameOver(); return; }
@@ -190,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('restart-button').onclick = resetGame;
 });
 
-// 操作系
+// 操作リスナー
 document.addEventListener('keydown', e => {
     if(gameOver || !current) return;
     const k = e.key.toLowerCase();
