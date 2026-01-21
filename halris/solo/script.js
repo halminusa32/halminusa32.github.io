@@ -56,6 +56,15 @@ function spawn(type = null) {
     current = { pos:{x:startX, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
     drawNext(); drawHold();
+
+    // 出現した瞬間に重なっていたら即終了
+    if (collide(board, current)) {
+        gameOver = true;
+        showGameOverScreen();
+        return;
+    }
+    sync();
+}
     
     // ゲームオーバー判定: 上から4行目以内 (y < 4) かつ 中央4列 (x:3～6) にブロックが埋まっているか
     for (let x = 3; x <= 6; x++) {
@@ -144,6 +153,18 @@ function lockPiece() {
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
     }));
+
+    //修正：ブロックが置かれた後に「死域」チェック
+    //上から4行目 (y=0,1,2,3) の中央4列 (x=3,4,5,6) をチェック
+    for (let y= 0; y <= 3; y++) {
+        for (let x = 3; x <= 6; x++) {
+            if (board[y][x] !== null) [
+                gameOver = true;
+            showGameOverScreen();
+            return;
+        }
+    }
+}
     let nextB = board.filter(r => r.some(c => c === null));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
