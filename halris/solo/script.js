@@ -33,9 +33,7 @@ const LOCK_DELAY = 500;
 
 function sync() {
     if(!current || gameOver) return;
-    set(ref(db, `games/${roomId}/player`), { 
-        board: board, pos: current.pos, type: current.type, shape: current.shape 
-    });
+    set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape });
 }
 
 function refillBag() {
@@ -76,16 +74,34 @@ function collide(b, p) {
     return false;
 }
 
-// ゴースト（落下予測）の描画
 function drawGhost() {
     if (!current) return;
-    let ghostPos = { ...current.pos };
-    while (!collide(board, { pos: { x: ghostPos.x, y: ghostPos.y + 1 }, shape: current.shape })) {
-        ghostPos.y++;
+    let g = { ...current.pos };
+    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
+    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
+}
+
+function rotate(dir = 1) {
+    if (gameOver || !current) return;
+    const prevShape = current.shape;
+    const prevPos = { ...current.pos };
+    if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
+
+    const moveX = [0, -1, 1, 0, 0, -2, 2, 0], moveY = [0, 0, 0, -1, 1, 0, 0, 2];
+    let success = false;
+    for (let i = 0; i < moveX.length; i++) {
+        current.pos.x = prevPos.x + moveX[i];
+        current.pos.y = prevPos.y + moveY[i];
+        if (!collide(board, current)) { success = true; break; }
     }
-    current.shape.forEach((r, y) => r.forEach((v, x) => {
-        if (v) drawBlock(ctx, ghostPos.x + x, ghostPos.y + y, COLORS[current.type], 0.2); // 透明度0.2
-    }));
+    if (!success) { current.shape = prevShape; current.pos = prevPos; }
+    else {
+        if (collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
+            if (lockTimer) { clearTimeout(lockTimer); lockTimer = setTimeout(lockPiece, LOCK_DELAY); }
+        }
+        sync();
+    }
 }
 
 function lockPiece() {
@@ -109,14 +125,6 @@ function drop() {
     } else { sync(); }
 }
 
-function rotate(dir = 1) {
-    if(gameOver || !current) return;
-    const prev = current.shape;
-    if(dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
-    if (collide(board, current)) current.shape = prev; else sync();
-}
-
 function hold() {
     if (!canHold || gameOver) return;
     let t = holdPiece; holdPiece = current.type;
@@ -128,9 +136,7 @@ function drawHold() {
     hCtx.clearRect(0,0,60,60);
     if (!holdPiece) return;
     const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
-    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{
-        if(v) drawBlock(hCtx, x + offX, y + 1, COLORS[holdPiece], 1, 15);
-    }));
+    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x + offX, y + 1, COLORS[holdPiece], 1, 15); }));
 }
 
 function drawNext() {
@@ -138,33 +144,24 @@ function drawNext() {
     for(let i=0; i<4; i++) {
         let t = nextQueue[i];
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{
-            if(v) drawBlock(nCtx, x + offX, y + 1 + (i * 3), COLORS[t], 1, 15);
-        }));
+        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x + offX, y + 1 + (i * 3), COLORS[t], 1, 15); }));
     }
 }
 
 function update() {
-    ctx.fillStyle = '#151515'; // 背景色をわずかに明るく
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#151515'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
-    if(current) {
-        drawGhost(); // 先にゴーストを描く
-        current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }));
-    }
+    if(current) { drawGhost(); current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); })); }
     if (!gameOver) requestAnimationFrame(update);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const playBtn = document.getElementById('play');
-    if (playBtn) {
-        playBtn.onclick = () => {
-            document.getElementById('room-setup').style.display = 'none';
-            document.getElementById('game-container').style.display = 'flex';
-            refillBag(); updateNextQueue(); spawn(); update();
-            setInterval(drop, 1000);
-        };
-    }
+    document.getElementById('play').onclick = () => {
+        document.getElementById('room-setup').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+        refillBag(); updateNextQueue(); spawn(); update();
+        setInterval(drop, 1000);
+    };
 });
 
 document.addEventListener('keydown', e => {
