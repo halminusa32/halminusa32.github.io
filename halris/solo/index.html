@@ -3,19 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HALRIS ONLINE</title>
+    <title>HALRIS SOLO</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>HALRIS ONLINE</h1>
+    <h1>HALRIS SOLO</h1>
     
     <div id="room-setup">
         <p style="margin-bottom: 20px; font-size: 18px;">プレイする？</p>
-        <div class="join-buttons">
-            <button id="btn-p1" class="btn gray">はい</button>
-            <button id="btn-p2" class="btn gray">はい</button>
-        </div>
-        <p style="font-size: 10px; color: #555; margin-top: 10px;">※左が1P、右が2Pとして参加します</p>
+        <button id="play" class="btn gray" style="width: 120px; border-radius: 10px;">はい</button>
     </div>
 
     <div id="game-container" style="display: none;">
@@ -27,14 +23,8 @@
         </div>
 
         <div class="player-section">
-            <div class="label">YOU</div>
+            <div class="label">SOLO</div>
             <canvas id="tetris" width="240" height="480"></canvas>
-        </div>
-
-        <div class="player-section enemy">
-            <div class="label">ENEMY</div>
-            <canvas id="enemy-tetris" width="180" height="360"></canvas>
-            <div id="enemy-score" class="value">0</div>
         </div>
     </div>
 
