@@ -28,9 +28,7 @@ const SHAPES = {
 
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
-let lockTimer = null;
-let gameInterval = null; // ゲームループのインターバルIDを保持
-
+let lockTimer = null, gameInterval = null;
 const LOCK_DELAY = 500;
 
 function sync() {
@@ -56,47 +54,60 @@ function spawn(type = null) {
     current = { pos:{x:startX, y:0}, shape:SHAPES[t], type:t };
     canHold = true;
     drawNext(); drawHold();
-
-    // 出現した瞬間に重なっていたら即終了
+    
     if (collide(board, current)) {
-        gameOver = true;
-        showGameOverScreen();
+        finishGame();
         return;
     }
     sync();
 }
-    
-    // ゲームオーバー判定: 上から4行目以内 (y < 4) かつ 中央4列 (x:3～6) にブロックが埋まっているか
-    for (let x = 3; x <= 6; x++) {
-        if (board[3][x] !== null) { // 4行目 (0から数えて3)
-            gameOver = true;
-            showGameOverScreen();
-            return;
+
+function lockPiece() {
+    if (!current || gameOver) return;
+    current.shape.forEach((r,y) => r.forEach((v,x) => {
+        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
+    }));
+
+    // 中開けREN対策：上部4行の中央4列にブロックがあるか判定
+    for (let y = 0; y <= 3; y++) {
+        for (let x = 3; x <= 6; x++) {
+            if (board[y][x] !== null) {
+                finishGame();
+                return;
+            }
         }
     }
 
-    if (collide(board, current)) { // 出現時に衝突したら即ゲームオーバー
-        gameOver = true;
-        showGameOverScreen();
-        return;
-    }
-    sync();
+    let nextB = board.filter(r => r.some(c => c === null));
+    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    board = nextB;
+    clearTimeout(lockTimer); lockTimer = null;
+    spawn();
 }
 
-function showGameOverScreen() {
+function finishGame() {
+    gameOver = true;
+    clearInterval(gameInterval);
     document.getElementById('game-over-screen').style.display = 'flex';
-    clearInterval(gameInterval); // 自動落下を停止
-    // キーボード/タッチ操作を無効化
-    document.removeEventListener('keydown', handleKeyDown);
-    document.querySelectorAll('.touch-controls .btn').forEach(btn => {
-        btn.removeEventListener('touchstart', handleTouchStart);
-    });
 }
 
-function hideGameOverScreen() {
+function resetGame() {
+    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    gameOver = false;
+    holdPiece = null;
+    canHold = true;
+    bag = [];
+    nextQueue = [];
+    clearTimeout(lockTimer);
+    if (gameInterval) clearInterval(gameInterval);
+    
     document.getElementById('game-over-screen').style.display = 'none';
+    refillBag();
+    updateNextQueue();
+    spawn();
+    update();
+    gameInterval = setInterval(drop, 1000);
 }
-
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
@@ -117,59 +128,29 @@ function collide(b, p) {
 function drawGhost() {
     if (!current) return;
     let g = { ...current.pos };
-    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) {
-        g.y++;
-    }
+    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
     current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
 }
 
 function rotate(dir = 1) {
     if (gameOver || !current) return;
-    const prevShape = current.shape;
-    const prevPos = { ...current.pos };
+    const prevS = current.shape, prevP = { ...current.pos };
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
 
-    const moveX = [0, -1, 1, 0, -1, 1, -2, 2, 0, 0];
-    const moveY = [0, 0, 0, 1, 1, 1, 0, 0, 2, -1];
-    
-    let success = false;
+    const moveX = [0, -1, 1, 0, -1, 1, -2, 2, 0, 0], moveY = [0, 0, 0, 1, 1, 1, 0, 0, 2, -1];
+    let ok = false;
     for (let i = 0; i < moveX.length; i++) {
-        current.pos.x = prevPos.x + moveX[i];
-        current.pos.y = prevPos.y + moveY[i];
-        if (!collide(board, current)) { success = true; break; }
+        current.pos.x = prevP.x + moveX[i]; current.pos.y = prevP.y + moveY[i];
+        if (!collide(board, current)) { ok = true; break; }
     }
-    if (!success) { current.shape = prevShape; current.pos = prevPos; }
+    if (!ok) { current.shape = prevS; current.pos = prevP; }
     else {
         if (collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
             if (lockTimer) { clearTimeout(lockTimer); lockTimer = setTimeout(lockPiece, LOCK_DELAY); }
         }
         sync();
     }
-}
-
-function lockPiece() {
-    if (!current || gameOver) return;
-    current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
-    }));
-
-    //修正：ブロックが置かれた後に「死域」チェック
-    //上から4行目 (y=0,1,2,3) の中央4列 (x=3,4,5,6) をチェック
-    for (let y= 0; y <= 3; y++) {
-        for (let x = 3; x <= 6; x++) {
-            if (board[y][x] !== null) [
-                gameOver = true;
-            showGameOverScreen();
-            return;
-        }
-    }
-}
-    let nextB = board.filter(r => r.some(c => c === null));
-    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB;
-    clearTimeout(lockTimer); lockTimer = null;
-    spawn();
 }
 
 function drop() {
@@ -191,16 +172,16 @@ function hold() {
 function drawHold() {
     hCtx.clearRect(0,0,60,60);
     if (!holdPiece) return;
-    const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
-    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x + offX, y + 1, COLORS[holdPiece], 1, 15); }));
+    const off = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
+    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x + off, y + 1, COLORS[holdPiece], 1, 15); }));
 }
 
 function drawNext() {
     nCtx.clearRect(0,0,60,180);
     for(let i=0; i<4; i++) {
         let t = nextQueue[i];
-        const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x + offX, y + 1 + (i * 3), COLORS[t], 1, 15); }));
+        const off = (t === 'i' || t === 'o') ? 0.5 : 1;
+        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x + off, y + 1 + (i * 3), COLORS[t], 1, 15); }));
     }
 }
 
@@ -211,74 +192,34 @@ function update() {
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// ゲームのリセットと開始
-function resetGame() {
-    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false;
-    holdPiece = null;
-    canHold = true;
-    bag = [];
-    nextQueue = [];
-    clearTimeout(lockTimer);
-    if (gameInterval) clearInterval(gameInterval); // 既存のインターバルをクリア
-    
-    hideGameOverScreen();
-    refillBag();
-    updateNextQueue();
-    spawn();
-    update(); // ゲームループを開始
-    gameInterval = setInterval(drop, 1000); // 新しいゲームループを開始
-    
-    // キーボード/タッチ操作を再有効化
-    document.addEventListener('keydown', handleKeyDown);
-    document.querySelectorAll('.touch-controls .btn').forEach(btn => {
-        btn.addEventListener('touchstart', handleTouchStart, {passive:false});
-    });
-}
-
-// キー操作ハンドラを関数として定義
-function handleKeyDown(e) {
-    if(gameOver) return; // ゲームオーバー時は操作無効
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; else sync(); }
-    else if (k === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; else sync(); }
-    else if (k === 'arrowdown') drop();
-    else if (k === 'arrowup' || k === 'x') rotate(1);
-    else if (k === 'z') rotate(-1);
-    else if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
-    else if (k === 'c' || k === 'shift') hold();
-}
-
-// タッチ操作ハンドラを関数として定義
-function handleTouchStart(e) {
-    e.preventDefault(); 
-    if(gameOver || !current) return; // ゲームオーバー時は操作無効
-    const btnId = e.currentTarget.id;
-
-    if (btnId === 'ctrl-left') { current.pos.x--; if(collide(board,current)) current.pos.x++; else sync(); }
-    else if (btnId === 'ctrl-right') { current.pos.x++; if(collide(board,current)) current.pos.x--; else sync(); }
-    else if (btnId === 'ctrl-down') drop();
-    else if (btnId === 'ctrl-up') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
-    else if (btnId === 'ctrl-rot-r') rotate(1);
-    else if (btnId === 'ctrl-rot-l') rotate(-1);
-    else if (btnId === 'ctrl-hold') hold();
-}
-
-
+// イベント登録
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('play').onclick = () => {
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('game-container').style.display = 'flex';
-        resetGame(); // ゲーム開始時にリセット関数を呼び出す
+        resetGame();
     };
-
-    document.getElementById('restart-button').onclick = () => {
-        resetGame(); // リスタートボタンが押されたらゲームをリセット
-    };
-
-    // 初期イベントリスナーを設定（ゲームオーバー時は無効化される）
-    document.addEventListener('keydown', handleKeyDown);
-    document.querySelectorAll('.touch-controls .btn').forEach(btn => {
-        btn.addEventListener('touchstart', handleTouchStart, {passive:false});
-    });
+    document.getElementById('restart-button').onclick = resetGame;
 });
+
+document.addEventListener('keydown', e => {
+    if(!current || gameOver) return;
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; else sync(); }
+    if (k === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; else sync(); }
+    if (k === 'arrowdown') drop();
+    if (k === 'arrowup' || k === 'x') rotate(1);
+    if (k === 'z') rotate(-1);
+    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === 'c' || k === 'shift') hold();
+});
+
+const touch = (id, fn) => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
+};
+touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; else sync(); });
+touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; else sync(); });
+touch('ctrl-down', drop);
+touch('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
+touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
