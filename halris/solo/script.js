@@ -76,6 +76,18 @@ function collide(b, p) {
     return false;
 }
 
+// ゴースト（落下予測）の描画
+function drawGhost() {
+    if (!current) return;
+    let ghostPos = { ...current.pos };
+    while (!collide(board, { pos: { x: ghostPos.x, y: ghostPos.y + 1 }, shape: current.shape })) {
+        ghostPos.y++;
+    }
+    current.shape.forEach((r, y) => r.forEach((v, x) => {
+        if (v) drawBlock(ctx, ghostPos.x + x, ghostPos.y + y, COLORS[current.type], 0.2); // 透明度0.2
+    }));
+}
+
 function lockPiece() {
     if (!current || gameOver) return;
     current.shape.forEach((r,y) => r.forEach((v,x) => {
@@ -133,13 +145,16 @@ function drawNext() {
 }
 
 function update() {
-    ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#151515'; // 背景色をわずかに明るく
+    ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
-    if(current) current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }));
+    if(current) {
+        drawGhost(); // 先にゴーストを描く
+        current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }));
+    }
     if (!gameOver) requestAnimationFrame(update);
 }
 
-// ボタンにクリック機能を登録
 document.addEventListener('DOMContentLoaded', () => {
     const playBtn = document.getElementById('play');
     if (playBtn) {
@@ -152,7 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 操作
 document.addEventListener('keydown', e => {
     if(!current || gameOver) return;
     const k = e.key.toLowerCase();
