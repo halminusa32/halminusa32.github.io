@@ -3,51 +3,36 @@ body { background: #000; color: #fff; font-family: monospace; display: flex; fle
 #game-container { display: flex; gap: 20px; background: #111; padding: 20px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
 .player-section { display: flex; flex-direction: column; align-items: center; }
 .side { width: 70px; }
-canvas { background: #404040; border: 1px solid #333; }
+canvas { background: #151515; border: 1px solid #333; }
 #hold-canvas, #next-canvas { background: #000; border: 1px solid #222; }
 .label { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
 
-/* ゲームオーバー画面のスタイル調整 */
+/* ゲームオーバー画面（初期状態は非表示） */
 #game-over-screen {
-    position: fixed; /* absolute から fixed に変更して、画面全体に広がるように */
+    display: none; 
+    position: fixed;
     top: 0; left: 0;
-    width: 100vw; height: 100vh; /* 画面いっぱいに */
-    background: rgba(0, 0, 0, 0.85); /* 半透明の黒 */
+    width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
     color: white;
-    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 1000; /* 最前面に表示 */
-    font-family: 'Press Start 2P', cursive; /* レトロゲームっぽいフォントがあれば */
-    text-shadow: 2px 2px 4px #000;
+    z-index: 1000;
 }
+
 #game-over-screen h2 {
-    font-size: 3em; /* 大きめに */
+    font-size: 3em;
     margin-bottom: 30px;
-    color: #ff3333; /* 赤色 */
-    animation: pulse 1.5s infinite; /* 点滅アニメーション */
+    color: #ff3333;
+    animation: pulse 1.5s infinite;
 }
+
 @keyframes pulse {
     0% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.05); opacity: 0.8; }
     100% { transform: scale(1); opacity: 1; }
 }
-#restart-button {
-    background-color: #007bff; /* 青色 */
-    color: white;
-    padding: 15px 30px;
-    border: none;
-    border-radius: 8px;
-    font-size: 1.2em;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-#restart-button:hover {
-    background-color: #0056b3;
-}
-/* ----- ここまで追加・修正 ----- */
-
 
 .touch-controls { display: none; margin-top: 15px; flex-direction: column; gap: 8px; }
 @media (max-width: 600px) { #game-container { scale: 0.8; } .touch-controls { display: flex; } }
