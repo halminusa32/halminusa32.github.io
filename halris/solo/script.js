@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
 
-// --- Firebase設定 ---
 const firebaseConfig = {
     apiKey: "AIzaSyCJ4Ky4vXVR3nC2UPJWcVZ-tphs2oVu1ig",
     authDomain: "tetris-online-f63af.firebaseapp.com",
@@ -16,7 +15,6 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const roomId = "solo-room-data";
 
-// --- キャンバス設定 ---
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
@@ -28,15 +26,13 @@ const SHAPES = {
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
 
-// --- ゲーム変数 ---
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null;
-let lockResetCount = 0;      // 接地中の操作リセット回数
-const LOCK_DELAY = 500;      // 設置猶予（0.5秒）
-const MAX_LOCK_RESETS = 15;  // 最大リセット回数
+let lockResetCount = 0;
+const LOCK_DELAY = 500;
+const MAX_LOCK_RESETS = 15;
 
-// --- ユーティリティ ---
 function sync() {
     if(!current || gameOver) return;
     set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape });
@@ -57,36 +53,71 @@ function collide(b, p) {
         for (let x=0; x<p.shape[y].length; x++) {
             if (p.shape[y][x]) {
                 let ny = p.pos.y + y, nx = p.pos.x + x;
-                if (ny < 0 || ny >= ROWS || nx < 0 || nx >= COLS || b[ny][nx] !== null) return true;
+                // 下・左右・設置済みとの衝突（y < 0 は空中扱いなので衝突させない）
+                if (ny >= ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx] !== null)) return true;
             }
         }
     }
     return false;
 }
 
-// --- 設置猶予の制御 ---
-function resetLockTimer() {
-    if (lockTimer) {
-        clearTimeout(lockTimer);
-        lockTimer = null;
+function rotate(dir = 1) {
+    if (gameOver || !current) return;
+    const prevShape = current.shape;
+    const prevPos = { ...current.pos };
+    if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
+
+    const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1], [-1,-1], [1,-1]];
+    let success = false;
+    for (let k of kicks) {
+        current.pos.x = prevPos.x + k[0];
+        current.pos.y = prevPos.y + k[1];
+        if (!collide(board, current)) { success = true; break; }
     }
+    if (!success) { current.shape = prevShape; current.pos = prevPos; }
+    else { handleMoveReset(); sync(); }
 }
 
 function handleMoveReset() {
     if (!current) return;
     const isGrounded = collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    
     if (isGrounded) {
-        if (lockResetCount < MAX_LOCK_RESETS) {
-            lockResetCount++;
-            resetLockTimer(); 
-        }
-    } else {
-        resetLockTimer(); // 空中なら無条件でタイマー停止
-    }
+        if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); }
+    } else { resetLockTimer(); }
 }
 
-// --- コアアクション ---
+function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
+
+function lockPiece() {
+    if (!current || gameOver) return;
+    if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
+        lockTimer = null; return;
+    }
+
+    let isTopOut = false;
+    current.shape.forEach((r,y) => r.forEach((v,x) => {
+        if (v) {
+            let ny = current.pos.y + y;
+            let nx = current.pos.x + x;
+            if (ny >= 0 && ny < ROWS) {
+                board[ny][nx] = COLORS[current.type];
+            } else if (ny < 0) {
+                // 修正：20段目より上の、中央4列(3-6)に置かれたらTop Out
+                if (nx >= 3 && nx <= 6) isTopOut = true;
+            }
+        }
+    }));
+
+    if (isTopOut) { showGameOver(); return; }
+
+    let nextB = board.filter(r => r.some(c => c === null));
+    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    board = nextB;
+    lockTimer = null;
+    spawn();
+}
+
 function spawn(type = null) {
     resetLockTimer();
     lockResetCount = 0;
@@ -100,68 +131,11 @@ function spawn(type = null) {
     sync();
 }
 
-function rotate(dir = 1) {
-    if (gameOver || !current) return;
-    const prevShape = current.shape;
-    const prevPos = { ...current.pos };
-
-    if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
-
-    // TST対応SRSキックデータ
-    const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,-1], [-1,-1], [1,-1], [-2,0], [2,0], [0,2]];
-    
-    let success = false;
-    for (let k of kicks) {
-        current.pos.x = prevPos.x + k[0];
-        current.pos.y = prevPos.y + k[1];
-        if (!collide(board, current)) { success = true; break; }
-    }
-
-    if (!success) {
-        current.shape = prevShape;
-        current.pos = prevPos;
-    } else {
-        handleMoveReset();
-        sync();
-    }
-}
-
-function lockPiece() {
-    if (!current || gameOver) return;
-    if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
-        lockTimer = null;
-        return;
-    }
-
-    current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
-    }));
-
-    // ゲームオーバー判定（中央4列）
-    for (let y = 0; y <= 3; y++) {
-        for (let x = 3; x <= 6; x++) {
-            if (board[y][x] !== null) { showGameOver(); return; }
-        }
-    }
-
-    let nextB = board.filter(r => r.some(c => c === null));
-    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB;
-    
-    lockTimer = null;
-    spawn();
-}
-
 function drop() {
     if(gameOver || !current) return;
     current.pos.y++;
-    if (collide(board, current)) {
-        current.pos.y--;
-    } else {
-        resetLockTimer();
-        sync();
-    }
+    if (collide(board, current)) { current.pos.y--; }
+    else { resetLockTimer(); sync(); }
 }
 
 function hold() {
@@ -171,7 +145,6 @@ function hold() {
     canHold = false; drawHold();
 }
 
-// --- 描画 ---
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
     c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
 }
@@ -180,7 +153,7 @@ function drawGhost() {
     if (!current) return;
     let g = { ...current.pos };
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
-    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
+    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
 }
 
 function drawHold() {
@@ -200,28 +173,32 @@ function drawNext() {
     }
 }
 
-// --- ループ & 状態管理 ---
 function handleLocking() {
     if (!current || gameOver) return;
     const isGrounded = collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
     if (isGrounded) {
         if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-    } else {
-        resetLockTimer();
-    }
+    } else { resetLockTimer(); }
 }
 
 function update() {
     handleLocking();
     ctx.fillStyle = '#151515'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
-    if(current) { drawGhost(); current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); })); }
+    if(current) { 
+        drawGhost(); 
+        current.shape.forEach((r,y)=>r.forEach((v,x)=>{ 
+            if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); 
+        })); 
+    }
     if (!gameOver) requestAnimationFrame(update);
 }
 
 function showGameOver() {
     gameOver = true;
     if (gameInterval) clearInterval(gameInterval);
+    // 修正：盤面を全白にする演出
+    board = board.map(row => row.map(() => '#ffffff'));
     document.getElementById('game-over-screen').style.display = 'flex';
 }
 
@@ -236,7 +213,6 @@ function resetGame() {
     gameInterval = setInterval(drop, 1000);
 }
 
-// --- イベント登録 ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('play').onclick = resetGame;
     document.getElementById('restart-button').onclick = resetGame;
@@ -262,6 +238,4 @@ touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.p
 touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; else { handleMoveReset(); sync(); } });
 touch('ctrl-down', drop);
 touch('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
-touch('ctrl-rot-r', () => rotate(1)); 
-touch('ctrl-rot-l', () => rotate(-1)); 
-touch('ctrl-hold', hold);
+touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
