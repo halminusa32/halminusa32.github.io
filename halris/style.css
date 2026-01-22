@@ -3,6 +3,7 @@
     --text-color: #ffffff;
     --solo-color: #2ecc71;
     --multi-color: #3498db;
+    --cpu-color: #9b59b6; /* CPU用のパープル */
     --card-bg: rgba(255, 255, 255, 0.05);
     --border-color: rgba(255, 255, 255, 0.1);
     --hover-border-color: rgba(255, 255, 255, 0.5);
@@ -18,8 +19,8 @@ body {
     align-items: center;
     justify-content: center;
     height: 100vh;
-    overflow: hidden; /* 背景アニメーションがはみ出さないように */
-    position: relative; /* background-animの基準にする */
+    overflow: hidden;
+    position: relative;
 }
 
 /* --- 背景アニメーション --- */
@@ -29,11 +30,11 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d); /* グラデーション */
-    background-size: 400% 400%; /* 大きくしてアニメーションで動かす */
-    animation: gradient-anim 15s ease infinite; /* グラデーションのアニメーション */
-    opacity: 0.2; /* 薄くする */
-    z-index: -1; /* 最背面に配置 */
+    background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d);
+    background-size: 400% 400%;
+    animation: gradient-anim 15s ease infinite;
+    opacity: 0.2;
+    z-index: -1;
 }
 
 @keyframes gradient-anim {
@@ -45,7 +46,7 @@ body {
 /* --- メインコンテンツ --- */
 .main-content {
     text-align: center;
-    z-index: 1; /* 背景アニメーションより手前に */
+    z-index: 1;
 }
 
 h1.title-anim {
@@ -53,8 +54,8 @@ h1.title-anim {
     letter-spacing: 0.5rem;
     margin-bottom: 3rem;
     text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
-    opacity: 0; /* 初期非表示 */
-    animation: slide-in 1s ease-out forwards; /* スライドインアニメーション */
+    opacity: 0;
+    animation: slide-in 1s ease-out forwards;
 }
 
 @keyframes slide-in {
@@ -67,6 +68,7 @@ h1.title-anim {
     gap: 30px;
     flex-wrap: wrap;
     justify-content: center;
+    max-width: 1000px;
 }
 
 .mode-card {
@@ -82,16 +84,16 @@ h1.title-anim {
     justify-content: center;
     transition: all 0.3s ease;
     background: var(--card-bg);
-    backdrop-filter: blur(5px); /* 背景のぼかし効果 */
-    opacity: 0; /* 初期非表示 */
-    transform: translateY(20px); /* 初期位置を下げる */
-    animation: fade-in-up 0.6s ease-out forwards; /* フェードイン＆スライドアップ */
+    backdrop-filter: blur(5px);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fade-in-up 0.6s ease-out forwards;
 }
 
 /* カードの遅延アニメーション */
-.fade-in-delay1 { animation-delay: 0.8s; } /* H1の後に少し遅れて */
-.fade-in-delay2 { animation-delay: 1.2s; } /* さらに遅れて */
-
+.fade-in-delay1 { animation-delay: 0.8s; }
+.fade-in-delay2 { animation-delay: 1.1s; }
+.fade-in-delay3 { animation-delay: 1.4s; } /* CPU用に追加 */
 
 @keyframes fade-in-up {
     0% { opacity: 0; transform: translateY(20px); }
@@ -104,8 +106,10 @@ h1.title-anim {
     box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5);
 }
 
+/* 各モードのホバーカラー */
 .mode-card.solo:hover { background: var(--solo-color); }
 .mode-card.multi:hover { background: var(--multi-color); }
+.mode-card.cpu:hover { background: var(--cpu-color); }
 
 .icon {
     font-size: 3rem;
@@ -124,9 +128,14 @@ h1.title-anim {
     margin-top: 5px;
 }
 
-/* iPad/Mobile用調整 */
+/* モバイル対応 */
+@media (max-width: 900px) {
+    .container { gap: 15px; }
+    .mode-card { width: 240px; height: 150px; }
+}
+
 @media (max-width: 600px) {
     h1.title-anim { font-size: 2rem; margin-bottom: 2rem; }
-    .mode-card { width: 85vw; height: 160px; }
-    .container { flex-direction: column; gap: 20px; }
+    .mode-card { width: 85vw; height: 140px; }
+    .container { flex-direction: column; align-items: center; gap: 15px; }
 }
