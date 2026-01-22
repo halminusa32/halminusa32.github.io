@@ -2,14 +2,18 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>HALRIS - VS CPU</title>
+    <title>HALRIS - VS AI</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="start-screen">
-        <h1 style="color: #9b59b6; letter-spacing: 5px;">VS CPU</h1>
-        <button id="start-button">READY?</button>
-        <a href="../" style="margin-top:15px; color:#888; text-decoration:none; font-size:14px;">BACK TO MENU</a>
+        <h1 style="color: #9b59b6; letter-spacing: 5px;">VS AI</h1>
+        <div style="margin-bottom: 20px;">
+            <button class="lv-btn" data-speed="2000">LV.1 (EASY)</button>
+            <button class="lv-btn" data-speed="1000">LV.2 (NORMAL)</button>
+            <button class="lv-btn" data-speed="500">LV.3 (HARD)</button>
+        </div>
+        <a href="../" class="btn-link">BACK TO MENU</a>
     </div>
 
     <div id="game-ui" class="game-layout" style="display:none;">
@@ -24,15 +28,14 @@
                 <canvas id="next-canvas" width="60" height="180"></canvas>
             </div>
         </div>
-
         <div class="enemy-container">
-            <div class="enemy-label">CPU (LV.1)</div>
+            <div id="ai-label" class="enemy-label">AI LV.1</div>
             <canvas id="enemy-tetris" width="240" height="480"></canvas>
         </div>
     </div>
 
     <div id="game-over-screen">
-        <h1>GAME OVER</h1>
+        <h1 id="result-text">GAME OVER</h1>
         <button id="restart-button">RETRY</button>
         <a href="../" class="btn-link">MENU</a>
     </div>
