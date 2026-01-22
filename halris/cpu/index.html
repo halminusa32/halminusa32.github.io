@@ -2,16 +2,19 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HALRIS - VS AI</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="background-anim"></div>
+
     <div id="start-screen">
-        <h1 style="color: #9b59b6; letter-spacing: 5px;">VS AI</h1>
-        <div style="margin-bottom: 20px;">
-            <button class="lv-btn" data-speed="2000">LV.1 (EASY)</button>
-            <button class="lv-btn" data-speed="1000">LV.2 (NORMAL)</button>
-            <button class="lv-btn" data-speed="500">LV.3 (HARD)</button>
+        <h1 class="title-anim" style="color: #9b59b6;">VS AI</h1>
+        <div class="level-select">
+            <button class="lv-btn" data-speed="2000">LV.1 EASY</button>
+            <button class="lv-btn" data-speed="1000">LV.2 NORMAL</button>
+            <button class="lv-btn" data-speed="400">LV.3 HARD</button>
         </div>
         <a href="../" class="btn-link">BACK TO MENU</a>
     </div>
@@ -22,15 +25,20 @@
                 <div class="label">HOLD</div>
                 <canvas id="hold-canvas" width="60" height="60"></canvas>
             </div>
-            <canvas id="tetris" width="240" height="480"></canvas>
+            <div class="canvas-wrapper">
+                <canvas id="tetris" width="240" height="480"></canvas>
+            </div>
             <div class="side-panel">
                 <div class="label">NEXT</div>
                 <canvas id="next-canvas" width="60" height="180"></canvas>
             </div>
         </div>
+
         <div class="enemy-container">
             <div id="ai-label" class="enemy-label">AI LV.1</div>
-            <canvas id="enemy-tetris" width="240" height="480"></canvas>
+            <div class="canvas-wrapper ai">
+                <canvas id="enemy-tetris" width="240" height="480"></canvas>
+            </div>
         </div>
     </div>
 
