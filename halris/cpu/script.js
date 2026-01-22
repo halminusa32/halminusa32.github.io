@@ -109,11 +109,12 @@ function lockPiece() {
     spawn();
 }
 
+// お邪魔攻撃
 function sendGarbage(targetBoard, lines) {
     for (let i = 0; i < lines; i++) {
         targetBoard.shift();
         let row = Array(COLS).fill('#555');
-        row[Math.floor(Math.random() * COLS)] = null;
+        row[Math.floor(Math.random() * COLS)] = null; // 穴
         targetBoard.push(row);
     }
 }
@@ -127,19 +128,56 @@ function spawn() {
     sync();
 }
 
+// --- CPU AI ロジック (ミノを形ごと配置するように改良) ---
 function updateCpu() {
     if (gameOver) return;
-    let x = Math.floor(Math.random() * COLS);
-    for (let y = ROWS - 1; y >= 0; y--) {
-        if (enemyBoard[y][x] === null) { enemyBoard[y][x] = '#333'; break; }
+
+    // CPUが使うミノをランダムに選ぶ
+    const types = ['i','o','t','s','z','j','l'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const shape = SHAPES[type];
+    const color = COLORS[type];
+
+    // CPUがランダムなX位置にミノをテレポートさせて固定する
+    let x = Math.floor(Math.random() * (COLS - shape[0].length));
+    let y = 0;
+    
+    // 一番下まで落とす
+    while(!collide(enemyBoard, {pos:{x, y:y+1}, shape})) {
+        y++;
+        if(y > ROWS) break;
     }
+
+    // ミノを盤面に書き込む
+    shape.forEach((r, sy) => r.forEach((v, sx) => {
+        if (v) {
+            let ny = y + sy;
+            let nx = x + sx;
+            if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS) {
+                enemyBoard[ny][nx] = color;
+            }
+        }
+    }));
+
+    // CPUのライン消去判定
     let cpuCleared = 0;
     enemyBoard = enemyBoard.filter(r => {
         if (r.every(c => c !== null)) { cpuCleared++; return false; }
         return true;
     });
     while (enemyBoard.length < ROWS) enemyBoard.unshift(Array(COLS).fill(null));
-    if (cpuCleared > 0) sendGarbage(board, 1);
+    
+    // CPUがラインを消したらプレイヤーに攻撃
+    if (cpuCleared > 0) {
+        let attack = cpuCleared === 4 ? 4 : cpuCleared - 1;
+        if (attack >= 0) sendGarbage(board, attack || 1); 
+    }
+
+    // CPUの敗北判定（上まで埋まったらリセット、またはプレイヤーの勝ち）
+    if (enemyBoard[1].some(c => c !== null)) {
+        // CPUが死んだらプレイヤーの勝ちだが、ここでは盤面リセットでお茶を濁す
+        enemyBoard = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    }
 }
 
 function draw() {
@@ -150,6 +188,7 @@ function draw() {
             if(v && current.pos.y+y>=0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); 
         }));
     }
+    // CPU描画
     eCtx.fillStyle = '#111'; eCtx.fillRect(0,0,eCanvas.width,eCanvas.height);
     enemyBoard.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(eCtx, x, y, c, 24); }));
 }
@@ -199,8 +238,17 @@ function initGame() {
     refillBag(); updateNextQueue(); spawn();
     if (dropInterval) clearInterval(dropInterval);
     if (cpuInterval) clearInterval(cpuInterval);
-    dropInterval = setInterval(() => { if(!gameOver){ current.pos.y++; if(collide(board,current)) {current.pos.y--; lockPiece();} sync(); }}, 1000);
-    cpuInterval = setInterval(updateCpu, 600);
+    
+    dropInterval = setInterval(() => { 
+        if(!gameOver){ 
+            current.pos.y++; 
+            if(collide(board,current)) {current.pos.y--; lockPiece();} 
+            sync();
+        } 
+    }, 1000);
+    
+    // CPUの動作間隔 (1500ms = 1.5秒に1回ミノを置く)
+    cpuInterval = setInterval(updateCpu, 1500); 
     mainLoop();
 }
 
