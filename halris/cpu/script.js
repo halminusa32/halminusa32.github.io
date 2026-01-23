@@ -27,30 +27,57 @@ const SHAPES = {
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
 
-let board, enemyBoard, current, gameOver, holdPiece, canHold, bag, nextQueue;
-let lockTimer, dropInterval, aiInterval, requestID, aiSpeed;
+let board, enemyBoard, current, gameOver, holdPiece, canHold, nextQueue;
+let dropInterval, aiInterval, requestID, aiSpeed;
+let playerGarbageBuffer = 0, aiGarbageBuffer = 0;
 
-function sync() {
-    if(!current || gameOver) return;
-    set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape });
+// --- 演出：ライン消去（ホワイトアウト） ---
+async function clearLinesEffect(targetBoard) {
+    let lines = [];
+    targetBoard.forEach((row, y) => { if (row.every(cell => cell !== null && cell !== '#ffffff')) lines.push(y); });
+    if (lines.length === 0) return 0;
+
+    lines.forEach(y => targetBoard[y] = Array(COLS).fill('#ffffff')); // 白くする
+    draw(); 
+    await new Promise(r => setTimeout(r, 300)); // 0.3秒待機
+
+    lines.forEach(y => {
+        targetBoard.splice(y, 1);
+        targetBoard.unshift(Array(COLS).fill(null));
+    });
+    return lines.length;
 }
 
-// --- AI Logic (ほいこAI仕様: 最低点探索) ---
-function updateAI() {
+// --- お邪魔適用 ---
+function applyGarbage(targetBoard, count) {
+    for (let i = 0; i < count; i++) {
+        targetBoard.shift();
+        let row = Array(COLS).fill('#555');
+        row[Math.floor(Math.random() * COLS)] = null;
+        targetBoard.push(row);
+    }
+}
+
+// --- AI：回転と設置の概念 ---
+async function updateAI() {
     if (gameOver) return;
     const types = ['i','o','t','s','z','j','l'];
     const type = types[Math.floor(Math.random() * types.length)];
-    const shape = SHAPES[type];
+    let shape = SHAPES[type];
+    
+    // AIが回転を試行
+    const rotations = Math.floor(Math.random() * 4);
+    for(let i=0; i<rotations; i++) shape = shape[0].map((_, i) => shape.map(row => row[i]).reverse());
 
+    // 一番低い場所を探す
     let heights = Array(COLS).fill(ROWS);
     for(let x=0; x<COLS; x++) {
         for(let y=0; y<ROWS; y++) { if(enemyBoard[y][x]) { heights[x] = y; break; } }
     }
-
-    let bestX = 0, minHeight = 0;
+    let bestX = 0, minH = 0;
     for(let x=0; x <= COLS - shape[0].length; x++) {
-        let ground = Math.max(...heights.slice(x, x + shape[0].length));
-        if(ground > minHeight) { minHeight = ground; bestX = x; }
+        let g = Math.max(...heights.slice(x, x + shape[0].length));
+        if(g > minH) { minH = g; bestX = x; }
     }
 
     let y = 0;
@@ -60,23 +87,31 @@ function updateAI() {
         if (v && y+sy < ROWS) enemyBoard[y+sy][bestX+sx] = COLORS[type];
     }));
 
-    let cleared = 0;
-    enemyBoard = enemyBoard.filter(r => { if(r.every(c => c !== null)) { cleared++; return false; } return true; });
-    while (enemyBoard.length < ROWS) enemyBoard.unshift(Array(COLS).fill(null));
-    if (cleared > 0) sendGarbage(board, cleared === 4 ? 4 : cleared - 1 || 1);
+    const cleared = await clearLinesEffect(enemyBoard);
+    if (cleared > 0) playerGarbageBuffer += (cleared === 4 ? 4 : cleared - 1 || 1);
+
+    // AI設置後にお邪魔を適用
+    applyGarbage(enemyBoard, aiGarbageBuffer);
+    aiGarbageBuffer = 0;
     if (enemyBoard[0].some(c => c !== null)) showGameOver("YOU WIN!");
 }
 
-function sendGarbage(target, lines) {
-    for(let i=0; i<lines; i++) {
-        target.shift();
-        let row = Array(COLS).fill('#555');
-        row[Math.floor(Math.random()*COLS)] = null;
-        target.push(row);
-    }
+// --- プレイヤー：設置とお邪魔保留 ---
+async function lockPiece() {
+    if (!current || gameOver) return;
+    current.shape.forEach((r,y) => r.forEach((v,x) => {
+        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
+    }));
+
+    const cleared = await clearLinesEffect(board);
+    if (cleared > 0) aiGarbageBuffer += (cleared === 4 ? 4 : cleared - 1);
+
+    // プレイヤー設置後にお邪魔を適用
+    applyGarbage(board, playerGarbageBuffer);
+    playerGarbageBuffer = 0;
+    spawn();
 }
 
-// --- Player Core ---
 function collide(b, p) {
     for (let y=0; y<p.shape.length; y++) {
         for (let x=0; x<p.shape[y].length; x++) {
@@ -87,13 +122,6 @@ function collide(b, p) {
         }
     }
     return false;
-}
-
-function rotate() {
-    const prev = current.shape;
-    current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    if (collide(board, current)) current.shape = prev;
-    sync();
 }
 
 function spawn() {
@@ -109,22 +137,7 @@ function spawn() {
     sync();
 }
 
-function lockPiece() {
-    current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
-    }));
-    let cleared = 0;
-    board = board.filter(r => { if(r.every(c => c !== null)) { cleared++; return false; } return true; });
-    while (board.length < ROWS) board.unshift(Array(COLS).fill(null));
-    if (cleared > 0) sendGarbage(enemyBoard, cleared === 4 ? 4 : cleared - 1);
-    spawn();
-}
-
-function mainLoop() {
-    if (gameOver) return;
-    draw();
-    requestID = requestAnimationFrame(mainLoop);
-}
+function sync() { if(current && !gameOver) set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape }); }
 
 function draw() {
     ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -133,47 +146,27 @@ function draw() {
     
     eCtx.fillStyle = '#000'; eCtx.fillRect(0,0,eCanvas.width,eCanvas.height);
     enemyBoard.forEach((r,y)=>r.forEach((c,x)=> { if(c) drawBlock(eCtx, x, y, c, 24); }));
+
+    document.getElementById('player-meter').style.height = `${(playerGarbageBuffer / ROWS) * 100}%`;
+    document.getElementById('ai-meter').style.height = `${(aiGarbageBuffer / ROWS) * 100}%`;
 }
 
-function drawBlock(c, x, y, color, sz = SIZE) {
-    c.fillStyle = color; c.fillRect(x*sz, y*sz, sz-1, sz-1);
-}
+function drawBlock(c, x, y, color, sz = SIZE) { c.fillStyle = color; c.fillRect(x*sz, y*sz, sz-1, sz-1); }
+function drawHold() { hCtx.clearRect(0,0,60,60); if(holdPiece) SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=> { if(v) drawBlock(hCtx, x+0.5, y+0.5, COLORS[holdPiece], 15); })); }
+function drawNext() { nCtx.clearRect(0,0,60,180); nextQueue.slice(0,4).forEach((t, i) => { SHAPES[t].forEach((r,y)=>r.forEach((v,x)=> { if(v) drawBlock(nCtx, x+0.5, y+0.5+i*3, COLORS[t], 15); })); }); }
 
-function drawHold() {
-    hCtx.clearRect(0,0,60,60);
-    if(holdPiece) SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=> { if(v) drawBlock(hCtx, x+0.5, y+0.5, COLORS[holdPiece], 15); }));
-}
-
-function drawNext() {
-    nCtx.clearRect(0,0,60,180);
-    nextQueue.slice(0,4).forEach((t, i) => {
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=> { if(v) drawBlock(nCtx, x+0.5, y+0.5+i*3, COLORS[t], 15); }));
-    });
-}
-
-function showGameOver(txt) {
-    gameOver = true;
-    clearInterval(dropInterval); clearInterval(aiInterval);
-    document.getElementById('result-text').innerText = txt;
-    document.getElementById('game-over-screen').style.display = 'flex';
-}
+function showGameOver(txt) { gameOver = true; clearInterval(dropInterval); clearInterval(aiInterval); document.getElementById('result-text').innerText = txt; document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function init(speed, label) {
-    aiSpeed = speed;
-    document.getElementById('ai-label').innerText = label;
+    aiSpeed = speed; document.getElementById('ai-label').innerText = label;
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     enemyBoard = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    nextQueue = []; holdPiece = null; gameOver = false;
-    document.getElementById('start-screen').style.display = 'none';
-    document.getElementById('game-ui').style.display = 'flex';
+    nextQueue = []; holdPiece = null; gameOver = false; playerGarbageBuffer = 0; aiGarbageBuffer = 0;
+    document.getElementById('start-screen').style.display = 'none'; document.getElementById('game-ui').style.display = 'flex';
     spawn();
-    dropInterval = setInterval(() => {
-        current.pos.y++;
-        if(collide(board, current)) { current.pos.y--; lockPiece(); }
-        sync();
-    }, 1000);
+    dropInterval = setInterval(() => { if(!gameOver){ current.pos.y++; if(collide(board, current)){ current.pos.y--; lockPiece(); } sync(); }}, 1000);
     aiInterval = setInterval(updateAI, aiSpeed);
-    mainLoop();
+    (function loop() { if(!gameOver) { draw(); requestID = requestAnimationFrame(loop); } })();
 }
 
 document.querySelectorAll('.lv-btn').forEach(b => b.onclick = () => init(parseInt(b.dataset.speed), b.innerText));
@@ -184,7 +177,7 @@ document.addEventListener('keydown', e => {
     if(e.key === 'ArrowLeft') { current.pos.x--; if(collide(board, current)) current.pos.x++; }
     if(e.key === 'ArrowRight') { current.pos.x++; if(collide(board, current)) current.pos.x--; }
     if(e.key === 'ArrowDown') { current.pos.y++; if(collide(board, current)) current.pos.y--; }
-    if(e.key === 'ArrowUp') rotate();
+    if(e.key === 'ArrowUp') { const p = current.shape; current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse()); if(collide(board, current)) current.shape = p; }
     if(e.key === ' ') { while(!collide(board, {pos:{x:current.pos.x, y:current.pos.y+1}, shape:current.shape})) current.pos.y++; lockPiece(); }
     if(e.key.toLowerCase() === 'c' && canHold) {
         let t = holdPiece; holdPiece = current.type;
