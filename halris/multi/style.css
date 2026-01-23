@@ -1,17 +1,39 @@
-body { background: #000; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; }
-#room-setup { background: #111; padding: 20px; border-radius: 12px; border: 2px solid #333; text-align: center; touch-action: auto; }
-#game-container { display: flex; gap: 10px; background: #111; padding: 10px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
-.player-section { display: flex; flex-direction: column; align-items: center; }
-.side { width: 70px; }
-canvas { background: #404040; border: 1px solid #222; }
-#hold-canvas, #next-canvas { background: #111; border: 1px solid #333; }
-#enemy-tetris { opacity: 0.4; background: #000; }
-.label { font-size: 10px; color: #888; margin-bottom: 3px; }
-.value { font-size: 14px; color: #fff; }
-.touch-controls { display: none; margin-top: 10px; flex-direction: column; gap: 5px; }
-@media (max-width: 750px) { #game-container { scale: 0.7; } .touch-controls { display: flex; } }
-.control-row { display: flex; justify-content: center; gap: 8px; }
-.btn { width: 55px; height: 55px; border-radius: 50%; border: none; background: #333; color: #fff; font-weight: bold; }
-.blue { background: #007bff; width: 120px; border-radius: 10px; }
-.purple { background: #6f42c1; }
-.gray { width: 70px; border-radius: 8px; font-size: 11px; }
+:root {
+    --bg-color: #0a0a0a;
+    --player-color: #3498db;
+    --enemy-color: #e74c3c;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: white;
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.game-layout { display: flex; gap: 40px; align-items: center; }
+#game-container, .ai-board-wrapper { display: flex; gap: 10px; align-items: flex-end; }
+
+.meter-container { width: 8px; height: 480px; background: #222; border-radius: 4px; position: relative; overflow: hidden; }
+.meter-fill { position: absolute; bottom: 0; width: 100%; height: 0%; background: #ff3333; transition: height 0.2s; box-shadow: 0 0 10px #ff3333; }
+
+.canvas-wrapper { border: 3px solid var(--player-color); background: #000; line-height: 0; }
+.canvas-wrapper.enemy { border-color: var(--enemy-color); }
+
+.enemy-container { opacity: 0.8; transform: scale(0.9); text-align: center; }
+.enemy-label { color: var(--enemy-color); font-weight: bold; margin-bottom: 5px; }
+
+.side-panel { display: flex; flex-direction: column; gap: 10px; }
+.label { font-size: 10px; color: #888; text-align: center; }
+
+#room-info { display: flex; gap: 10px; margin: 20px 0; }
+input { padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 5px; }
+button { padding: 10px 20px; background: var(--player-color); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+#game-over-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+.btn-link { color: #888; text-decoration: none; font-size: 14px; margin-top: 10px; display: block; }
