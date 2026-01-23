@@ -8,7 +8,7 @@
 </head>
 <body>
     <div id="start-screen">
-        <h1 style="color: #9b59b6;">VS AI</h1>
+        <h1 style="color: #9b59b6; letter-spacing: 5px;">VS AI</h1>
         <div class="level-select">
             <button class="lv-btn" data-speed="2000">LV.1 EASY</button>
             <button class="lv-btn" data-speed="1000">LV.2 NORMAL</button>
@@ -23,15 +23,10 @@
                 <div class="label">HOLD</div>
                 <canvas id="hold-canvas" width="60" height="60"></canvas>
             </div>
-            
-            <div class="meter-container">
-                <div id="player-meter" class="meter-fill"></div>
-            </div>
-
+            <div class="meter-container"><div id="player-meter" class="meter-fill"></div></div>
             <div class="canvas-wrapper">
                 <canvas id="tetris" width="240" height="480"></canvas>
             </div>
-
             <div class="side-panel">
                 <div class="label">NEXT</div>
                 <canvas id="next-canvas" width="60" height="180"></canvas>
@@ -40,13 +35,11 @@
 
         <div class="enemy-container">
             <div id="ai-label" class="enemy-label">AI LV.1</div>
-            <div class="game-container">
+            <div class="ai-board-wrapper">
                 <div class="canvas-wrapper ai">
                     <canvas id="enemy-tetris" width="240" height="480"></canvas>
                 </div>
-                <div class="meter-container">
-                    <div id="ai-meter" class="meter-fill"></div>
-                </div>
+                <div class="meter-container"><div id="ai-meter" class="meter-fill"></div></div>
             </div>
         </div>
     </div>
