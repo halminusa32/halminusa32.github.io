@@ -2,47 +2,51 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>MultiPlay - TETRIS ONLINE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HALRIS - ONLINE MULTI</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="room-setup">
-        <input type="text" id="room-id" placeholder="ルームコード">
-        <div class="setup-buttons">
-            <button id="btn-p1">1P参加</button>
-            <button id="btn-p2">2P参加</button>
+    <div id="start-screen">
+        <h1 style="color: #3498db; letter-spacing: 5px;">ONLINE MULTI</h1>
+        <div id="room-info">
+            <input type="text" id="room-id-input" placeholder="ROOM ID">
+            <button id="join-btn">JOIN GAME</button>
         </div>
-        <a href="../" style="color:#aaa; display:block; margin-top:20px;">TOPへ戻る</a>
+        <a href="../" class="btn-link">BACK TO MENU</a>
     </div>
 
-    <div id="game-container" style="display:none;">
-        <div class="side-panel">
-            <div class="label">HOLD</div>
-            <canvas id="hold-canvas" width="60" height="60"></canvas>
-            <div class="label" style="margin-top:20px;">SCORE</div>
-            <div id="score">0</div>
+    <div id="game-ui" class="game-layout" style="display:none;">
+        <div id="game-container">
+            <div class="side-panel">
+                <div class="label">HOLD</div>
+                <canvas id="hold-canvas" width="60" height="60"></canvas>
+            </div>
+            <div class="meter-container"><div id="player-meter" class="meter-fill"></div></div>
+            <div class="canvas-wrapper">
+                <canvas id="tetris" width="240" height="480"></canvas>
+            </div>
+            <div class="side-panel">
+                <div class="label">NEXT</div>
+                <canvas id="next-canvas" width="60" height="180"></canvas>
+            </div>
         </div>
 
-        <div class="main-panel">
-            <div class="label">YOU</div>
-            <canvas id="tetris" width="240" height="480"></canvas>
-        </div>
-
-        <div class="main-panel">
-            <div class="label">ENEMY</div>
-            <canvas id="enemy-tetris" width="240" height="480"></canvas>
-            <div class="label" style="margin-top:10px;">ENEMY SCORE: <span id="enemy-score">0</span></div>
-        </div>
-
-        <div class="side-panel">
-            <div class="label">NEXT</div>
-            <canvas id="next-canvas" width="60" height="180"></canvas>
+        <div class="enemy-container">
+            <div id="enemy-label" class="enemy-label">WAITING...</div>
+            <div class="ai-board-wrapper">
+                <div class="canvas-wrapper enemy">
+                    <canvas id="enemy-tetris" width="240" height="480"></canvas>
+                </div>
+                <div class="meter-container"><div id="enemy-meter" class="meter-fill"></div></div>
+            </div>
         </div>
     </div>
 
-    <div id="controls">
-        <div class="row"><button id="ctrl-hold">HOLD</button><button id="ctrl-up">HARD</button><button id="ctrl-rot-r">ROT</button></div>
-        <div class="row"><button id="ctrl-left">←</button><button id="ctrl-down">↓</button><button id="ctrl-right">→</button></div>
+    <div id="game-over-screen">
+        <h1 id="result-text">GAME OVER</h1>
+        <button id="restart-button">RETRY</button>
+        <a href="../" class="btn-link">MENU</a>
     </div>
 
     <script type="module" src="script.js"></script>
