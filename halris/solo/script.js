@@ -53,7 +53,6 @@ function collide(b, p) {
         for (let x=0; x<p.shape[y].length; x++) {
             if (p.shape[y][x]) {
                 let ny = p.pos.y + y, nx = p.pos.x + x;
-                // 下・左右・設置済みとの衝突（y < 0 は空中扱いなので衝突させない）
                 if (ny >= ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx] !== null)) return true;
             }
         }
@@ -61,13 +60,21 @@ function collide(b, p) {
     return false;
 }
 
+// O-Spin対応：Oミノを特別扱いせず回転計算を通す
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
-    if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
 
+    // 行列回転処理
+    if (dir === 1) {
+        current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+    } else {
+        current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
+    }
+
+    // Wall Kick：回転後の衝突判定と位置補正
+    // [0,0]から順に試行し、隙間があればそこに収まる（これがO-Spinの鍵）
     const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1], [-1,-1], [1,-1]];
     let success = false;
     for (let k of kicks) {
@@ -75,8 +82,14 @@ function rotate(dir = 1) {
         current.pos.y = prevPos.y + k[1];
         if (!collide(board, current)) { success = true; break; }
     }
-    if (!success) { current.shape = prevShape; current.pos = prevPos; }
-    else { handleMoveReset(); sync(); }
+
+    if (!success) { 
+        current.shape = prevShape; 
+        current.pos = prevPos; 
+    } else { 
+        handleMoveReset(); 
+        sync(); 
+    }
 }
 
 function handleMoveReset() {
@@ -103,7 +116,6 @@ function lockPiece() {
             if (ny >= 0 && ny < ROWS) {
                 board[ny][nx] = COLORS[current.type];
             } else if (ny < 0) {
-                // 修正：20段目より上の、中央4列(3-6)に置かれたらTop Out
                 if (nx >= 3 && nx <= 6) isTopOut = true;
             }
         }
@@ -197,7 +209,6 @@ function update() {
 function showGameOver() {
     gameOver = true;
     if (gameInterval) clearInterval(gameInterval);
-    // 修正：盤面を全白にする演出
     board = board.map(row => row.map(() => '#ffffff'));
     document.getElementById('game-over-screen').style.display = 'flex';
 }
