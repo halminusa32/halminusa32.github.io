@@ -31,19 +31,19 @@ let board, enemyBoard, current, gameOver, holdPiece, canHold, nextQueue;
 let dropInterval, aiInterval, aiSpeed;
 let playerGarbageBuffer = 0, aiGarbageBuffer = 0;
 
+// --- 基本演出 ---
 async function clearLinesEffect(targetBoard) {
     let lines = [];
     targetBoard.forEach((row, y) => { if (row.every(cell => cell !== null && cell !== '#ffffff')) lines.push(y); });
     if (lines.length === 0) return 0;
     lines.forEach(y => targetBoard[y] = Array(COLS).fill('#ffffff'));
     draw(); 
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 150));
     lines.forEach(y => { targetBoard.splice(y, 1); targetBoard.unshift(Array(COLS).fill(null)); });
     return lines.length;
 }
 
 function applyGarbage(targetBoard, count) {
-    if (count <= 0) return;
     for (let i = 0; i < count; i++) {
         targetBoard.shift();
         let row = Array(COLS).fill('#555');
@@ -52,56 +52,83 @@ function applyGarbage(targetBoard, count) {
     }
 }
 
-// --- AI：センター4列あけ思考 ---
+// --- AI：画像通りのSミノ活用・4-Wide構築ロジック ---
 async function updateAI() {
     if (gameOver) return;
     const types = ['i','o','t','s','z','j','l'];
     const type = types[Math.floor(Math.random() * types.length)];
     let shape = SHAPES[type];
     
-    const rotations = Math.floor(Math.random() * 4);
-    for(let i=0; i<rotations; i++) shape = shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+    let bestX = 0, bestRotation = shape, bestScore = -Infinity;
 
-    let bestX = 0;
-    let bestScore = -Infinity;
+    for (let r = 0; r < 4; r++) {
+        for (let x = 0; x <= COLS - shape[0].length; x++) {
+            let y = 0;
+            while (!collide(enemyBoard, { pos: { x, y: y + 1 }, shape })) y++;
 
-    for(let x=0; x <= COLS - shape[0].length; x++) {
-        let y = 0;
-        while(!collide(enemyBoard, {pos:{x, y:y+1}, shape})) y++;
+            let score = y * 15; // 基礎点：低い位置ほど良い
+            let penalty = 0;
+            let bonus = 0;
 
-        let score = y; 
-        for (let sx = 0; sx < shape[0].length; sx++) {
-            let ax = x + sx;
-            // センター4列（3,4,5,6）を避ける判定を強化
-            if (ax >= 3 && ax <= 6) {
-                score -= 200; 
-            } else {
-                score += 30; // サイド（0,1,2 と 7,8,9）を優先
+            for (let sy = 0; sy < shape.length; sy++) {
+                for (let sx = 0; sx < shape[sy].length; sx++) {
+                    if (shape[sy][sx]) {
+                        let ax = x + sx;
+                        // 【中央4列あけ】3,4,5,6列への侵入は致命的なペナルティ
+                        if (ax >= 3 && ax <= 6) penalty += 10000;
+                        
+                        // 【画像再現ボーナス】端(0,1,2列 または 7,8,9列)に縦置き
+                        if (ax <= 1 || ax >= 8) bonus += 50; 
+                    }
+                }
+            }
+
+            // 【Sミノ(明るい緑)特有のロジック】画像を再現するため、縦長配置を好む
+            if (type === 's' && shape.length > shape[0].length) {
+                bonus += 200; 
+            }
+
+            // 隣接するブロックがあるか（スカスカに積まないようにする）
+            if (y < ROWS - 1) {
+                shape.forEach((row, sy) => row.forEach((v, sx) => {
+                    if (v && (x + sx === 0 || x + sx === 9 || enemyBoard[y + sy][x + sx - 1] || enemyBoard[y + sy][x + sx + 1])) {
+                        bonus += 20;
+                    }
+                }));
+            }
+
+            const totalScore = score + bonus - penalty;
+            if (totalScore > bestScore) {
+                bestScore = totalScore;
+                bestX = x;
+                bestRotation = JSON.parse(JSON.stringify(shape));
             }
         }
-        if(score > bestScore) { bestScore = score; bestX = x; }
+        shape = shape[0].map((_, i) => shape.map(row => row[i]).reverse());
     }
 
     let finalY = 0;
-    while(!collide(enemyBoard, {pos:{x:bestX, y:finalY+1}, shape})) finalY++;
-    shape.forEach((r, sy) => r.forEach((v, sx) => {
-        if (v && finalY+sy < ROWS) enemyBoard[finalY+sy][bestX+sx] = COLORS[type];
+    while (!collide(enemyBoard, { pos: { x: bestX, y: finalY + 1 }, shape: bestRotation })) finalY++;
+    bestRotation.forEach((r, sy) => r.forEach((v, sx) => {
+        if (v && finalY + sy < ROWS) enemyBoard[finalY + sy][bestX + sx] = COLORS[type];
     }));
 
     const cleared = await clearLinesEffect(enemyBoard);
-    if (cleared > 0) playerGarbageBuffer += (cleared === 4 ? 4 : Math.max(0, cleared - 1));
+    if (cleared > 0) playerGarbageBuffer += (cleared === 4 ? 4 : cleared); 
     applyGarbage(enemyBoard, aiGarbageBuffer);
     aiGarbageBuffer = 0;
     if (enemyBoard[0].some(c => c !== null)) showGameOver("YOU WIN!");
 }
 
-// --- プレイヤー：O-Spin対応 ---
+// --- プレイヤー操作（O-Spin対応） ---
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
+    
+    // O-Spinを可能にする広範なキック
     const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [0,-1]];
     let success = false;
     for (let k of kicks) {
@@ -118,7 +145,7 @@ async function lockPiece() {
         if (v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
     }));
     const cleared = await clearLinesEffect(board);
-    if (cleared > 0) aiGarbageBuffer += (cleared === 4 ? 4 : Math.max(0, cleared - 1));
+    if (cleared > 0) aiGarbageBuffer += (cleared === 4 ? 4 : cleared - 1);
     applyGarbage(board, playerGarbageBuffer);
     playerGarbageBuffer = 0;
     spawn();
