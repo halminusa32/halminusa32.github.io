@@ -2,54 +2,36 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HALRIS - VS AI</title>
+    <title>Gemini AI Tetris Battle</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="start-screen">
-        <h1 style="color: #9b59b6; letter-spacing: 5px;">VS AI</h1>
-        <div class="level-select">
-            <button class="lv-btn" data-speed="2000">LV.1 EASY</button>
-            <button class="lv-btn" data-speed="1000">LV.2 NORMAL</button>
-            <button class="lv-btn" data-speed="400">LV.3 HARD</button>
-        </div>
-        <a href="../" class="btn-link">BACK TO MENU</a>
-    </div>
-
-    <div id="game-ui" class="game-layout" style="display:none;">
-        <div id="game-container">
-            <div class="side-panel">
-                <div class="label">HOLD</div>
-                <canvas id="hold-canvas" width="60" height="60"></canvas>
+    <div id="game-container">
+        <div id="start-screen">
+            <h1>GEMINI AI TETRIS</h1>
+            <p>Google AI Studioで取得したAPIキーを入力してください</p>
+            <input type="password" id="api-key-input" placeholder="Enter Gemini API Key">
+            <div class="difficulty-selection">
+                <button class="start-btn" id="start-game-btn">GAME START</button>
             </div>
-            <div class="meter-container"><div id="player-meter" class="meter-fill"></div></div>
-            <div class="canvas-wrapper">
-                <canvas id="tetris" width="240" height="480"></canvas>
-            </div>
-            <div class="side-panel">
-                <div class="label">NEXT</div>
-                <canvas id="next-canvas" width="60" height="180"></canvas>
-            </div>
+            <p style="font-size: 10px; color: #666; margin-top: 10px;">※キーはGitHubには保存されず、ブラウザ内でのみ使用されます</p>
         </div>
 
-        <div class="enemy-container">
-            <div id="ai-label" class="enemy-label">AI LV.1</div>
-            <div class="ai-board-wrapper">
-                <div class="canvas-wrapper ai">
+        <div id="game-ui" style="display: none;">
+            <div class="player-side">
+                <div class="label">PLAYER (O-Spin)</div>
+                <div class="canvas-group">
+                    <canvas id="tetris" width="240" height="480"></canvas>
+                </div>
+            </div>
+            <div class="ai-side">
+                <div class="label">GEMINI AI (4-Wide)</div>
+                <div class="canvas-group">
                     <canvas id="enemy-tetris" width="240" height="480"></canvas>
                 </div>
-                <div class="meter-container"><div id="ai-meter" class="meter-fill"></div></div>
             </div>
         </div>
     </div>
-
-    <div id="game-over-screen">
-        <h1 id="result-text">GAME OVER</h1>
-        <button id="restart-button">RETRY</button>
-        <a href="../" class="btn-link">MENU</a>
-    </div>
-
     <script type="module" src="script.js"></script>
 </body>
 </html>
