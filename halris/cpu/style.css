@@ -1,39 +1,118 @@
-:root {
-    --bg-color: #0a0a0a;
-    --ai-color: #9b59b6;
-    --player-color: #3498db;
-}
-
+/* 基本設定 */
 body {
-    background-color: var(--bg-color);
-    color: white;
-    font-family: 'Segoe UI', sans-serif;
-    margin: 0;
+    background-color: #0a0a0c;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     height: 100vh;
+    margin: 0;
     overflow: hidden;
 }
 
-.game-layout { display: flex; gap: 40px; align-items: center; }
-#game-container, .ai-board-wrapper { display: flex; gap: 10px; align-items: flex-end; }
+#game-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
 
-/* お邪魔メーター */
-.meter-container { width: 8px; height: 480px; background: #222; border-radius: 4px; position: relative; overflow: hidden; }
-.meter-fill { position: absolute; bottom: 0; width: 100%; height: 0%; background: #ff3333; transition: height 0.2s; }
+/* API入力・スタート画面 */
+#start-screen {
+    background: rgba(20, 20, 25, 0.95);
+    padding: 40px;
+    border-radius: 15px;
+    border: 1px solid #444;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+    text-align: center;
+    z-index: 100;
+}
 
-.canvas-wrapper { border: 3px solid var(--player-color); background: #000; line-height: 0; }
-.canvas-wrapper.ai { border-color: var(--ai-color); }
+h1 {
+    color: #4285f4; /* Gemini Blue */
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+}
 
-.enemy-container { opacity: 0.8; transform: scale(0.9); text-align: center; }
-.enemy-label { color: var(--ai-color); font-weight: bold; margin-bottom: 5px; }
+#api-key-input {
+    width: 280px;
+    padding: 12px;
+    margin: 20px 0;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #fff;
+    border-radius: 5px;
+    outline: none;
+}
 
-.side-panel { display: flex; flex-direction: column; gap: 10px; }
-.label { font-size: 10px; color: #888; text-align: center; }
+#api-key-input:focus {
+    border-color: #4285f4;
+}
 
-button { padding: 10px 30px; background: transparent; color: white; border: 2px solid var(--ai-color); border-radius: 20px; cursor: pointer; font-weight: bold; }
-button:hover { background: var(--ai-color); }
+.start-btn {
+    padding: 12px 40px;
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
 
-#game-over-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-.btn-link { color: #888; text-decoration: none; font-size: 14px; margin-top: 10px; display: block; }
+.start-btn:hover {
+    background: #3367d6;
+    transform: scale(1.05);
+}
+
+/* ゲーム画面レイアウト */
+#game-ui {
+    display: flex;
+    gap: 50px;
+    padding: 20px;
+}
+
+.player-side, .ai-side {
+    text-align: center;
+}
+
+.label {
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #888;
+    text-transform: uppercase;
+}
+
+canvas {
+    background: #111;
+    border: 3px solid #222;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+/* Gemini AI（敵側）のキャンバスに少し光を当てる */
+#enemy-tetris {
+    border-color: #4285f4;
+}
+
+/* 終了画面 */
+#game-over-screen {
+    position: absolute;
+    background: rgba(0,0,0,0.85);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+}
+
+#restart-button {
+    margin-top: 20px;
+    padding: 10px 30px;
+    background: #555;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
