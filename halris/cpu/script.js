@@ -30,21 +30,30 @@ let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let enemyBoard = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current, gameOver = false, GEMINI_API_KEY = "";
 
-// --- Gemini API 思考ロジック ---
+// ... (前略: 基本変数やFirebase設定) ...
+
 async function askGemini(targetBoard, pieceType) {
     if (!GEMINI_API_KEY) return null;
 
-    // 盤面を0/1の文字列に変換
     const boardStr = targetBoard.map(row => row.map(c => c ? "1" : "0").join("")).join("\n");
     
-    const prompt = `テトリスの達人として、中開けRENを構築してください。
-【条件】
-・7種1巡の法則
-・積みすぎるとあなたがゲームオーバーになってしまうため15マス積んだら連鎖へ
-・出力はJSONのみ: {"x": 設置X座標, "rotation": 回転回数0-3}
-【盤面】
+    // 指示（プロンプト）の調整：制約1, 4を削除
+    const prompt = `
+あなたはテトリスの達人「ほいこ(10%)」として振る舞ってください。
+目的：中開けRENを死なない程度に組んで連鎖させてください。
+
+【制約ルール】
+1. 積み上げる高さは最大15マスまでとし、盤面が埋まって死なないように管理すること。
+2. テトリスの基本「7種1巡(7-Bag)」の法則を厳守してください。これまでのミノの流れから次に何が来るかを考慮し、地形を構築すること。
+
+【現在の状況】
+盤面（0:空, 1:埋）:
 ${boardStr}
-【ミノ】: ${pieceType}`;
+現在のミノ: ${pieceType}
+
+回答は以下のJSON形式のみで出力してください（解説不要）:
+{"x": 設置X座標(0-9), "rotation": 回転回数(0-3), "reason": "ほいこ(10%)としての戦略"}
+`;
 
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -53,13 +62,22 @@ ${boardStr}
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
         const data = await res.json();
+        
         const text = data.candidates[0].content.parts[0].text;
-        return JSON.parse(text.replace(/```json|```/g, ""));
+        const jsonMatch = text.match(/\{.*\}/s);
+        const decision = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+
+        if (decision && decision.reason) {
+            console.log("ほいこの思考:", decision.reason);
+        }
+        return decision;
     } catch (e) {
-        console.error("Gemini Error:", e);
+        console.error("Gemini 思考停止中:", e);
         return null;
     }
 }
+
+// ... (後略) ...
 
 // --- AI（Gemini）の行動実行 ---
 async function updateAI() {
