@@ -33,6 +33,12 @@ let lockResetCount = 0;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
 
+// --- O-Spin連打判定用変数 ---
+let rotationTimestamps = [];
+const O_SPIN_SPEED_THRESHOLD = 5; // 1秒間に5回
+let isOSpinActive = false;
+let score = 0;
+
 function sync() {
     if(!current || gameOver) return;
     set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape });
@@ -60,21 +66,25 @@ function collide(b, p) {
     return false;
 }
 
-// O-Spin対応：Oミノを特別扱いせず回転計算を通す
+// O-Spin判定を含む回転処理
 function rotate(dir = 1) {
     if (gameOver || !current) return;
+
+    // --- 回転連打検知ロジック ---
+    const now = Date.now();
+    rotationTimestamps = rotationTimestamps.filter(t => now - t < 1000); // 1秒以内の入力を抽出
+    rotationTimestamps.push(now);
+
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
 
-    // 行列回転処理
+    // 行列回転
     if (dir === 1) {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     } else {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
     }
 
-    // Wall Kick：回転後の衝突判定と位置補正
-    // [0,0]から順に試行し、隙間があればそこに収まる（これがO-Spinの鍵）
     const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1], [-1,-1], [1,-1]];
     let success = false;
     for (let k of kicks) {
@@ -86,7 +96,14 @@ function rotate(dir = 1) {
     if (!success) { 
         current.shape = prevShape; 
         current.pos = prevPos; 
-    } else { 
+    } else {
+        // --- O-Spin 条件チェック ---
+        if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_SPEED_THRESHOLD) {
+            isOSpinActive = true;
+            console.log("O-SPIN DETECTED!");
+        } else {
+            isOSpinActive = false;
+        }
         handleMoveReset(); 
         sync(); 
     }
@@ -108,6 +125,15 @@ function lockPiece() {
         lockTimer = null; return;
     }
 
+    // O-Spin成功時のボーナス加算
+    if (isOSpinActive && current.type === 'o') {
+        score += 1000;
+        console.log("O-SPIN BONUS +1000!");
+        // 視覚効果用フラッシュ
+        canvas.style.filter = 'brightness(2)';
+        setTimeout(() => canvas.style.filter = '', 100);
+    }
+
     let isTopOut = false;
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v) {
@@ -124,9 +150,15 @@ function lockPiece() {
     if (isTopOut) { showGameOver(); return; }
 
     let nextB = board.filter(r => r.some(c => c === null));
+    let linesCleared = ROWS - nextB.length;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    
     board = nextB;
+    score += linesCleared * 100; // 通常のライン消しスコア
+    
     lockTimer = null;
+    isOSpinActive = false;
+    rotationTimestamps = [];
     spawn();
 }
 
@@ -199,8 +231,13 @@ function update() {
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
     if(current) { 
         drawGhost(); 
+        
+        // O-Spin発動中はミノを白っぽく光らせる
+        let color = COLORS[current.type];
+        if (isOSpinActive && current.type === 'o') color = '#ffffff';
+
         current.shape.forEach((r,y)=>r.forEach((v,x)=>{ 
-            if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); 
+            if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, color); 
         })); 
     }
     if (!gameOver) requestAnimationFrame(update);
@@ -216,6 +253,9 @@ function showGameOver() {
 function resetGame() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     gameOver = false; holdPiece = null; canHold = true; bag = []; nextQueue = [];
+    score = 0;
+    isOSpinActive = false;
+    rotationTimestamps = [];
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
