@@ -40,12 +40,12 @@ let rotationTimestamps = [];
 const O_SPIN_THRESHOLD = 5; 
 let score = 0;
 
+// 操作設定 (DAS/ARR)
 const DAS_DELAY = 150; 
 const ARR_SPEED = 30;  
 let keyStates = {};    
 let moveTimers = {};   
 
-// Firebase同期 (forceReset時は空の状態を送る)
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
     const data = forceReset 
@@ -87,15 +87,14 @@ function movePiece(dir) {
 function startAutoMove(key, action) {
     if (moveTimers[key]) return;
     action(); 
-    moveTimers[key] = {
-        timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, ARR_SPEED); }, DAS_DELAY)
-    };
+    moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, ARR_SPEED); }, DAS_DELAY) };
 }
 
 function stopAutoMove(key) {
     if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; }
 }
 
+// 回転と壁蹴り（TST対応版）
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     const now = Date.now();
@@ -105,6 +104,7 @@ function rotate(dir = 1) {
     let evolved = false;
     const oldT = current.type, oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos};
 
+    // O-Spin進化判定
     if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
         current.type = 'i_evolved';
         current.shape = JSON.parse(JSON.stringify(SHAPES['i']));
@@ -113,10 +113,16 @@ function rotate(dir = 1) {
         evolved = true;
     }
 
+    // 回転
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
 
-    const kicks = evolved ? [[0,0], [-1,0], [1,0], [0,1], [0,-1]] : [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,-1]];
+    // 壁蹴りパターン (TSTを可能にするため深めのキック[0,2]などを復活)
+    let kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1]];
+    
+    // 進化時はめり込み防止のため制限
+    if (evolved) kicks = [[0,0], [-1,0], [1,0], [0,1], [0,-1]];
+
     let success = false;
     for (let k of kicks) {
         current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
@@ -155,7 +161,6 @@ function spawn(type = null) {
     updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
-    
     if (collide(board, nextP)) { showGameOver(); return; }
     current = nextP; canHold = true; drawNext(); drawHold(); sync();
 }
@@ -224,31 +229,17 @@ function showGameOver() {
 }
 
 function resetGame() {
-    // 画面を隠し、死亡フラグを折る
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
-    
-    // 全ての状態を完全に初期化
     if (gameInterval) clearInterval(gameInterval);
     if (requestID) cancelAnimationFrame(requestID);
-    
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false; 
-    current = null; holdPiece = null; canHold = true; 
+    gameOver = false; current = null; holdPiece = null; canHold = true; 
     bag = []; nextQueue = []; score = 0; rotationTimestamps = [];
-    
-    // Firebaseの古い残骸を消す
     sync(true); 
-    
-    refillBag(); 
-    updateNextQueue(); 
-    spawn(); // ここでcollide判定が走る
-    
-    if (!gameOver) {
-        update();
-        gameInterval = setInterval(drop, 1000);
-    }
+    refillBag(); updateNextQueue(); spawn(); 
+    if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -275,17 +266,15 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down');
 });
 
-const bindT = (id, k, act) => {
-    const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act); }, {passive:false});
-    el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
-};
-bindT('ctrl-left', 'left', () => movePiece(-1));
-bindT('ctrl-right', 'right', () => movePiece(1));
-bindT('ctrl-down', 'down', drop);
-
+// タッチ
 const tap = (id, fn) => {
     const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
 };
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
+const bindT = (id, k, act) => {
+    const el = document.getElementById(id); if(!el) return;
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act); }, {passive:false});
+    el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
+};
+bindT('ctrl-left', 'left', () => movePiece(-1)); bindT('ctrl-right', 'right', () => movePiece(1)); bindT('ctrl-down', 'down', drop);
