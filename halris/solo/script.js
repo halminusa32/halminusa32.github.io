@@ -20,7 +20,6 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
-// COLORSに進化後の黄色いI(i_evolved)を追加
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00',
     i_evolved: '#eeee00' 
@@ -37,10 +36,16 @@ let lockResetCount = 0;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
 
-// O-Spin判定用
+// O-Spin / 連打判定
 let rotationTimestamps = [];
 const O_SPIN_THRESHOLD = 5; 
 let score = 0;
+
+// --- 【重要】OSに依存しない移動管理 ---
+const DAS_DELAY = 150; // 押しっぱなし判定までの待ち時間(ms)
+const ARR_SPEED = 30;  // 連続移動の速さ(ms) - 30msはかなり速めです
+let keyStates = {};    // 現在押されているキーの状態
+let moveTimers = {};   // 各移動のインターバル管理
 
 function sync() {
     if(!current || gameOver) return;
@@ -69,26 +74,53 @@ function collide(b, p) {
     return false;
 }
 
+// 共通移動関数
+function movePiece(dir) {
+    if (gameOver || !current) return;
+    current.pos.x += dir;
+    if (collide(board, current)) {
+        current.pos.x -= dir;
+        return false;
+    }
+    handleMoveReset();
+    sync();
+    return true;
+}
+
+// --- 移動タイマーの制御 ---
+function startAutoMove(key, action) {
+    if (moveTimers[key]) return;
+    action(); // 1回目は即時実行
+    moveTimers[key] = {
+        timeout: setTimeout(() => {
+            moveTimers[key].interval = setInterval(action, ARR_SPEED);
+        }, DAS_DELAY)
+    };
+}
+
+function stopAutoMove(key) {
+    if (moveTimers[key]) {
+        clearTimeout(moveTimers[key].timeout);
+        clearInterval(moveTimers[key].interval);
+        delete moveTimers[key];
+    }
+}
+
 function rotate(dir = 1) {
     if (gameOver || !current) return;
-
-    // 連打記録
     const now = Date.now();
     rotationTimestamps.push(now);
     while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
-    // 進化判定：Oミノの時に秒間5回以上回転
     if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
         current.type = 'i_evolved';
-        current.shape = JSON.parse(JSON.stringify(SHAPES['i'])); // ディープコピー
+        current.shape = JSON.parse(JSON.stringify(SHAPES['i']));
         canvas.style.filter = 'brightness(2) saturate(2)';
         setTimeout(() => { canvas.style.filter = 'none'; }, 150);
     }
 
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
-
-    // 回転処理
     if (dir === 1) {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     } else {
@@ -102,7 +134,6 @@ function rotate(dir = 1) {
         current.pos.y = prevPos.y + k[1];
         if (!collide(board, current)) { success = true; break; }
     }
-
     if (!success) { current.shape = prevShape; current.pos = prevPos; }
     else { handleMoveReset(); sync(); }
 }
@@ -121,7 +152,6 @@ function lockPiece() {
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
         lockTimer = null; return;
     }
-
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v) {
             let ny = current.pos.y + y;
@@ -129,13 +159,11 @@ function lockPiece() {
             if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type];
         }
     }));
-
     let nextB = board.filter(r => r.some(c => c === null));
     let linesCleared = ROWS - nextB.length;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
     score += linesCleared * 100;
-    
     lockTimer = null;
     rotationTimestamps = [];
     spawn();
@@ -163,7 +191,7 @@ function drop() {
 
 function hold() {
     if (!canHold || gameOver) return;
-    let t = holdPiece === 'i_evolved' ? 'i' : holdPiece; // 進化版は通常Iとして保存
+    let t = holdPiece === 'i_evolved' ? 'i' : holdPiece;
     holdPiece = current.type === 'i_evolved' ? 'i' : current.type;
     if (t) spawn(t); else spawn();
     canHold = false; drawHold();
@@ -241,24 +269,59 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('restart-button').onclick = resetGame;
 });
 
-document.addEventListener('keydown', e => {
+// --- キーボードイベントの完全制御 ---
+window.addEventListener('keydown', e => {
     if(gameOver || !current) return;
     const k = e.key.toLowerCase();
-    if (k === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; else { handleMoveReset(); sync(); } }
-    if (k === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; else { handleMoveReset(); sync(); } }
-    if (k === 'arrowdown') drop();
+    
+    // すでに押されているキーは無視（OSのリピートを無効化）
+    if (keyStates[k]) return;
+    keyStates[k] = true;
+
+    if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
+    if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
+    if (k === 'arrowdown') startAutoMove('down', drop);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === ' ') { 
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+        lockPiece(); 
+    }
     if (k === 'c' || k === 'shift') hold();
 });
 
-const touch = (id, fn) => {
+window.addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    keyStates[k] = false;
+    if (k === 'arrowleft') stopAutoMove('left');
+    if (k === 'arrowright') stopAutoMove('right');
+    if (k === 'arrowdown') stopAutoMove('down');
+});
+
+// タッチ操作（ボタン長押し対応）
+const bindTouch = (id, keyName, action) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if(!gameOver && current) startAutoMove(keyName, action);
+    }, {passive:false});
+    el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopAutoMove(keyName);
+    }, {passive:false});
+};
+
+bindTouch('ctrl-left', 'left', () => movePiece(-1));
+bindTouch('ctrl-right', 'right', () => movePiece(1));
+bindTouch('ctrl-down', 'down', drop);
+
+// その他ボタン
+const tap = (id, fn) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
 };
-touch('ctrl-left', () => { current.pos.x--; if(collide(board,current)) current.pos.x++; else { handleMoveReset(); sync(); } });
-touch('ctrl-right', () => { current.pos.x++; if(collide(board,current)) current.pos.x--; else { handleMoveReset(); sync(); } });
-touch('ctrl-down', drop);
-touch('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
-touch('ctrl-rot-r', () => rotate(1)); touch('ctrl-rot-l', () => rotate(-1)); touch('ctrl-hold', hold);
+tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
+tap('ctrl-rot-r', () => rotate(1)); 
+tap('ctrl-rot-l', () => rotate(-1)); 
+tap('ctrl-hold', hold);
