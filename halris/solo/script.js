@@ -29,28 +29,35 @@ const SHAPES = {
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
 
+// SRS (Super Rotation System) のキックデータ (T, J, L, S, Z 用)
+const SRS_KICKS = {
+    "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
+    "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
+    "1->2": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
+    "2->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
+    "2->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]],
+    "3->2": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
+    "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
+    "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
+};
+
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null;
+let rotationState = 0; // 0:上, 1:右, 2:下, 3:左
 let lockResetCount = 0;
-const LOCK_DELAY = 500;
-const MAX_LOCK_RESETS = 15;
+const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 
 let rotationTimestamps = [];
 const O_SPIN_THRESHOLD = 5; 
 let score = 0;
 
-// 操作設定 (DAS/ARR)
-const DAS_DELAY = 150; 
-const ARR_SPEED = 30;  
-let keyStates = {};    
-let moveTimers = {};   
+const DAS_DELAY = 150, ARR_SPEED = 30;  
+let keyStates = {}, moveTimers = {};   
 
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
-    const data = forceReset 
-        ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } 
-        : { board, pos: current.pos, type: current.type, shape: current.shape };
+    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current.pos, type: current.type, shape: current.shape };
     set(ref(db, `games/${roomId}/player`), data);
 }
 
@@ -60,9 +67,7 @@ function refillBag() {
     bag = [...p];
 }
 
-function updateNextQueue() {
-    while(nextQueue.length < 5) { if(bag.length === 0) refillBag(); nextQueue.push(bag.pop()); }
-}
+function updateNextQueue() { while(nextQueue.length < 5) { if(bag.length === 0) refillBag(); nextQueue.push(bag.pop()); } }
 
 function collide(b, p) {
     if (!p || !p.shape) return false;
@@ -86,15 +91,12 @@ function movePiece(dir) {
 
 function startAutoMove(key, action) {
     if (moveTimers[key]) return;
-    action(); 
-    moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, ARR_SPEED); }, DAS_DELAY) };
+    action(); moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, ARR_SPEED); }, DAS_DELAY) };
 }
 
-function stopAutoMove(key) {
-    if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; }
-}
+function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
-// 回転と壁蹴り（TST対応版）
+// SRS準拠の回転
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     const now = Date.now();
@@ -102,9 +104,6 @@ function rotate(dir = 1) {
     while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
     let evolved = false;
-    const oldT = current.type, oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos};
-
-    // O-Spin進化判定
     if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
         current.type = 'i_evolved';
         current.shape = JSON.parse(JSON.stringify(SHAPES['i']));
@@ -113,22 +112,38 @@ function rotate(dir = 1) {
         evolved = true;
     }
 
-    // 回転
+    const oldT = current.type, oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
+
+    // 回転後の形状作成
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
-
-    // 壁蹴りパターン (TSTを可能にするため深めのキック[0,2]などを復活)
-    let kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1]];
     
-    // 進化時はめり込み防止のため制限
-    if (evolved) kicks = [[0,0], [-1,0], [1,0], [0,1], [0,-1]];
+    // 回転状態の更新
+    rotationState = (rotationState + dir + 4) % 4;
 
+    // SRSキック判定
     let success = false;
-    for (let k of kicks) {
-        current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
-        if (!collide(board, current)) { success = true; break; }
+    if (evolved || current.type === 'o') {
+        // Oミノまたは進化時はシンプルなキックのみ
+        const simpleKicks = [[0,0], [-1,0], [1,0], [0,1], [0,-1]];
+        for (let k of simpleKicks) {
+            current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
+            if (!collide(board, current)) { success = true; break; }
+        }
+    } else {
+        // T, J, L, S, Z ミノ用のSRSキック
+        const key = `${oldRS}->${rotationState}`;
+        const kicks = SRS_KICKS[key] || [[0,0]];
+        for (let k of kicks) {
+            current.pos.x = oldP.x + k[0];
+            current.pos.y = oldP.y + k[1]; // SRSはy軸が上がプラスだが、このコードは下がプラスなので符号に注意
+            // このエンジンでは y+ は「下」なので、SRSのy値を反転して適用
+            current.pos.y = oldP.y - k[1]; 
+            if (!collide(board, current)) { success = true; break; }
+        }
     }
-    if (!success) { current.type = oldT; current.shape = oldS; current.pos = oldP; }
+
+    if (!success) { current.type = oldT; current.shape = oldS; current.pos = oldP; rotationState = oldRS; }
     else { handleMoveReset(); sync(); }
 }
 
@@ -156,7 +171,7 @@ function lockPiece() {
 }
 
 function spawn(type = null) {
-    resetLockTimer(); lockResetCount = 0;
+    resetLockTimer(); lockResetCount = 0; rotationState = 0;
     let t = type || nextQueue.shift();
     updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
@@ -165,12 +180,7 @@ function spawn(type = null) {
     current = nextP; canHold = true; drawNext(); drawHold(); sync();
 }
 
-function drop() {
-    if(gameOver || !current) return;
-    current.pos.y++;
-    if (collide(board, current)) { current.pos.y--; }
-    else { resetLockTimer(); sync(); }
-}
+function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) { current.pos.y--; } else { resetLockTimer(); sync(); } }
 
 function hold() {
     if (!canHold || gameOver) return;
@@ -180,9 +190,7 @@ function hold() {
     canHold = false; drawHold();
 }
 
-function drawBlock(c, x, y, color, op = 1, sz = SIZE) {
-    c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1;
-}
+function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
 
 function drawGhost() {
     if (!current) return;
@@ -221,37 +229,24 @@ function update() {
     requestID = requestAnimationFrame(update);
 }
 
-function showGameOver() {
-    gameOver = true;
-    if (gameInterval) clearInterval(gameInterval);
-    if (requestID) cancelAnimationFrame(requestID);
-    document.getElementById('game-over-screen').style.display = 'flex';
-}
+function showGameOver() { gameOver = true; if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID); document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
-    if (gameInterval) clearInterval(gameInterval);
-    if (requestID) cancelAnimationFrame(requestID);
+    if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false; current = null; holdPiece = null; canHold = true; 
-    bag = []; nextQueue = []; score = 0; rotationTimestamps = [];
-    sync(true); 
-    refillBag(); updateNextQueue(); spawn(); 
+    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; score = 0; rotationTimestamps = [];
+    sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('play').onclick = resetGame;
-    document.getElementById('restart-button').onclick = resetGame;
-});
+document.addEventListener('DOMContentLoaded', () => { document.getElementById('play').onclick = resetGame; document.getElementById('restart-button').onclick = resetGame; });
 
 window.addEventListener('keydown', e => {
     if(gameOver || !current) return;
-    const k = e.key.toLowerCase();
-    if (keyStates[k]) return;
-    keyStates[k] = true;
+    const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
     if (k === 'arrowdown') startAutoMove('down', drop);
@@ -266,10 +261,7 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// タッチ
-const tap = (id, fn) => {
-    const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
-};
+const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 const bindT = (id, k, act) => {
