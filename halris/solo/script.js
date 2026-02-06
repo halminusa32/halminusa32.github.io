@@ -20,7 +20,11 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
-const COLORS = { i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00' };
+// COLORSに進化後の黄色いI(i_evolved)を追加
+const COLORS = { 
+    i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00',
+    i_evolved: '#eeee00' 
+};
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
@@ -33,10 +37,9 @@ let lockResetCount = 0;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
 
-// --- O-Spin連打判定用変数 ---
+// O-Spin判定用
 let rotationTimestamps = [];
-const O_SPIN_SPEED_THRESHOLD = 5; // 1秒間に5回
-let isOSpinActive = false;
+const O_SPIN_THRESHOLD = 5; 
 let score = 0;
 
 function sync() {
@@ -66,19 +69,26 @@ function collide(b, p) {
     return false;
 }
 
-// O-Spin判定を含む回転処理
 function rotate(dir = 1) {
     if (gameOver || !current) return;
 
-    // --- 回転連打検知ロジック ---
+    // 連打記録
     const now = Date.now();
-    rotationTimestamps = rotationTimestamps.filter(t => now - t < 1000); // 1秒以内の入力を抽出
     rotationTimestamps.push(now);
+    while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
+
+    // 進化判定：Oミノの時に秒間5回以上回転
+    if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
+        current.type = 'i_evolved';
+        current.shape = JSON.parse(JSON.stringify(SHAPES['i'])); // ディープコピー
+        canvas.style.filter = 'brightness(2) saturate(2)';
+        setTimeout(() => { canvas.style.filter = 'none'; }, 150);
+    }
 
     const prevShape = current.shape;
     const prevPos = { ...current.pos };
 
-    // 行列回転
+    // 回転処理
     if (dir === 1) {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     } else {
@@ -93,28 +103,15 @@ function rotate(dir = 1) {
         if (!collide(board, current)) { success = true; break; }
     }
 
-    if (!success) { 
-        current.shape = prevShape; 
-        current.pos = prevPos; 
-    } else {
-        // --- O-Spin 条件チェック ---
-        if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_SPEED_THRESHOLD) {
-            isOSpinActive = true;
-            console.log("O-SPIN DETECTED!");
-        } else {
-            isOSpinActive = false;
-        }
-        handleMoveReset(); 
-        sync(); 
-    }
+    if (!success) { current.shape = prevShape; current.pos = prevPos; }
+    else { handleMoveReset(); sync(); }
 }
 
 function handleMoveReset() {
     if (!current) return;
     const isGrounded = collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    if (isGrounded) {
-        if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); }
-    } else { resetLockTimer(); }
+    if (isGrounded) { if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); } }
+    else { resetLockTimer(); }
 }
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
@@ -125,39 +122,21 @@ function lockPiece() {
         lockTimer = null; return;
     }
 
-    // O-Spin成功時のボーナス加算
-    if (isOSpinActive && current.type === 'o') {
-        score += 1000;
-        console.log("O-SPIN BONUS +1000!");
-        // 視覚効果用フラッシュ
-        canvas.style.filter = 'brightness(2)';
-        setTimeout(() => canvas.style.filter = '', 100);
-    }
-
-    let isTopOut = false;
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v) {
             let ny = current.pos.y + y;
             let nx = current.pos.x + x;
-            if (ny >= 0 && ny < ROWS) {
-                board[ny][nx] = COLORS[current.type];
-            } else if (ny < 0) {
-                if (nx >= 3 && nx <= 6) isTopOut = true;
-            }
+            if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type];
         }
     }));
-
-    if (isTopOut) { showGameOver(); return; }
 
     let nextB = board.filter(r => r.some(c => c === null));
     let linesCleared = ROWS - nextB.length;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    
     board = nextB;
-    score += linesCleared * 100; // 通常のライン消しスコア
+    score += linesCleared * 100;
     
     lockTimer = null;
-    isOSpinActive = false;
     rotationTimestamps = [];
     spawn();
 }
@@ -184,7 +163,8 @@ function drop() {
 
 function hold() {
     if (!canHold || gameOver) return;
-    let t = holdPiece; holdPiece = current.type;
+    let t = holdPiece === 'i_evolved' ? 'i' : holdPiece; // 進化版は通常Iとして保存
+    holdPiece = current.type === 'i_evolved' ? 'i' : current.type;
     if (t) spawn(t); else spawn();
     canHold = false; drawHold();
 }
@@ -220,9 +200,8 @@ function drawNext() {
 function handleLocking() {
     if (!current || gameOver) return;
     const isGrounded = collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    if (isGrounded) {
-        if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-    } else { resetLockTimer(); }
+    if (isGrounded) { if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY); } 
+    else { resetLockTimer(); }
 }
 
 function update() {
@@ -231,13 +210,8 @@ function update() {
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
     if(current) { 
         drawGhost(); 
-        
-        // O-Spin発動中はミノを白っぽく光らせる
-        let color = COLORS[current.type];
-        if (isOSpinActive && current.type === 'o') color = '#ffffff';
-
         current.shape.forEach((r,y)=>r.forEach((v,x)=>{ 
-            if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, color); 
+            if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); 
         })); 
     }
     if (!gameOver) requestAnimationFrame(update);
@@ -253,9 +227,7 @@ function showGameOver() {
 function resetGame() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     gameOver = false; holdPiece = null; canHold = true; bag = []; nextQueue = [];
-    score = 0;
-    isOSpinActive = false;
-    rotationTimestamps = [];
+    score = 0; rotationTimestamps = [];
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
