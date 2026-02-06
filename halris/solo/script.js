@@ -20,6 +20,8 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
+const O_SPIN_THRESHOLD = 5; // 1秒間に必要な最低回転数
+
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00',
     i_evolved: '#eeee00' 
@@ -85,14 +87,12 @@ function movePiece(dir) {
     handleMoveReset(); sync(); return true;
 }
 
-// ★ 移動用タイマー修正（待機時間ゼロのオプション追加）
 function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
     if (moveTimers[key]) return;
     action(); 
     if (useDas) {
         moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, DAS_DELAY) };
     } else {
-        // ★ ソフドロ用：即座にインターバル開始
         moveTimers[key] = { interval: setInterval(action, interval) };
     }
 }
@@ -108,7 +108,7 @@ function stopAutoMove(key) {
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     
-    // ★ O-Spin判定を確実に一番上で処理
+    // Windows対応：O-Spin判定
     if (current.type === 'o') {
         const now = Date.now();
         rotationTimestamps.push(now);
@@ -120,9 +120,9 @@ function rotate(dir = 1) {
             rotationState = 1; 
             canvas.style.filter = 'brightness(2) saturate(2)';
             setTimeout(() => { canvas.style.filter = 'none'; }, 150);
-            rotationTimestamps = []; // リセット
+            rotationTimestamps = [];
             handleMoveReset(); sync();
-            return; // 進化時は回転処理をスキップして終了
+            return; 
         }
     }
 
@@ -134,8 +134,9 @@ function rotate(dir = 1) {
     rotationState = (rotationState + dir + 4) % 4;
 
     let success = false;
+    // Oおよび進化Iは周囲を広めに探索してキックする
     if (current.type === 'o' || current.type === 'i_evolved') {
-        const simpleKicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1]];
+        const simpleKicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1], [-2,0], [2,0]];
         for (let k of simpleKicks) {
             current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
             if (!collide(board, current)) { success = true; break; }
@@ -172,7 +173,7 @@ function lockPiece() {
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB; score += cleared * 100;
+    board = nextB; score += (cleared === 4) ? 800 : cleared * 100;
     lockTimer = null; rotationTimestamps = []; spawn();
 }
 
@@ -206,17 +207,17 @@ function drawGhost() {
 }
 
 function drawHold() {
-    hCtx.clearRect(0,0,60,60); if (!holdPiece) return;
+    hCtx.clearRect(0,0,hCanvas.width,hCanvas.height); if (!holdPiece) return;
     const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
     SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15); }));
 }
 
 function drawNext() {
-    nCtx.clearRect(0,0,60,180);
+    nCtx.clearRect(0,0,nCanvas.width,nCanvas.height);
     for(let i=0; i<4; i++) {
         let t = nextQueue[i]; if(!t) continue;
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x+offX, y+1+(i*3), COLORS[t], 1, 15); }));
+        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15); }));
     }
 }
 
@@ -244,21 +245,23 @@ function resetGame() {
     if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
 }
 
-document.addEventListener('DOMContentLoaded', () => { document.getElementById('play').onclick = resetGame; document.getElementById('restart-button').onclick = resetGame; });
+document.addEventListener('DOMContentLoaded', () => { 
+    document.getElementById('play').onclick = resetGame; 
+    document.getElementById('restart-button').onclick = resetGame; 
+});
 
 window.addEventListener('keydown', e => {
     if(gameOver || !current) return;
     const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
-    
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
-    
-    // ★ ソフドロ：useDas = false で遊びをなくす
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
-    
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === ' ') { 
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+        lockPiece(); 
+    }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -269,7 +272,7 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// スマホ
+// スマホ対応
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
     el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
@@ -277,8 +280,13 @@ const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
 };
 bindT('ctrl-left', 'left', () => movePiece(-1));
 bindT('ctrl-right', 'right', () => movePiece(1));
-bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false); // ★ スマホ版も即座にｽｰｰｰ
+bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
 
-const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); };
+const tap = (id, fn) => { 
+    const el = document.getElementById(id); 
+    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); 
+};
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
-tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
+tap('ctrl-rot-r', () => rotate(1)); 
+tap('ctrl-rot-l', () => rotate(-1)); 
+tap('ctrl-hold', hold);
