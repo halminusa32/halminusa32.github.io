@@ -36,16 +36,16 @@ let lockResetCount = 0;
 const LOCK_DELAY = 500;
 const MAX_LOCK_RESETS = 15;
 
-// O-Spin / 連打判定
+// O-Spin / 進化判定用
 let rotationTimestamps = [];
 const O_SPIN_THRESHOLD = 5; 
 let score = 0;
 
-// --- 【重要】OSに依存しない移動管理 ---
-const DAS_DELAY = 150; // 押しっぱなし判定までの待ち時間(ms)
-const ARR_SPEED = 30;  // 連続移動の速さ(ms) - 30msはかなり速めです
-let keyStates = {};    // 現在押されているキーの状態
-let moveTimers = {};   // 各移動のインターバル管理
+// 移動制御 (DAS/ARR)
+const DAS_DELAY = 150; 
+const ARR_SPEED = 30;  
+let keyStates = {};    
+let moveTimers = {};   
 
 function sync() {
     if(!current || gameOver) return;
@@ -74,7 +74,6 @@ function collide(b, p) {
     return false;
 }
 
-// 共通移動関数
 function movePiece(dir) {
     if (gameOver || !current) return;
     current.pos.x += dir;
@@ -87,10 +86,9 @@ function movePiece(dir) {
     return true;
 }
 
-// --- 移動タイマーの制御 ---
 function startAutoMove(key, action) {
     if (moveTimers[key]) return;
-    action(); // 1回目は即時実行
+    action(); 
     moveTimers[key] = {
         timeout: setTimeout(() => {
             moveTimers[key].interval = setInterval(action, ARR_SPEED);
@@ -108,34 +106,55 @@ function stopAutoMove(key) {
 
 function rotate(dir = 1) {
     if (gameOver || !current) return;
+
     const now = Date.now();
     rotationTimestamps.push(now);
     while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
+    let evolvedThisTurn = false;
+    const oldType = current.type;
+    const oldShape = JSON.parse(JSON.stringify(current.shape));
+    const prevPos = { ...current.pos };
+
+    // 進化チェック
     if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
         current.type = 'i_evolved';
         current.shape = JSON.parse(JSON.stringify(SHAPES['i']));
         canvas.style.filter = 'brightness(2) saturate(2)';
         setTimeout(() => { canvas.style.filter = 'none'; }, 150);
+        evolvedThisTurn = true;
     }
 
-    const prevShape = current.shape;
-    const prevPos = { ...current.pos };
+    // 回転処理
     if (dir === 1) {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     } else {
         current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
     }
 
-    const kicks = [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,2], [-1,2], [1,2], [0,-1], [-1,-1], [1,-1]];
+    // めり込み防止キック（進化時は制限を厳しく）
+    const kicks = evolvedThisTurn 
+        ? [[0,0], [-1,0], [1,0], [0,1], [0,-1]] 
+        : [[0,0], [-1,0], [1,0], [0,1], [-1,1], [1,1], [0,-1]];
+
     let success = false;
     for (let k of kicks) {
         current.pos.x = prevPos.x + k[0];
         current.pos.y = prevPos.y + k[1];
-        if (!collide(board, current)) { success = true; break; }
+        if (!collide(board, current)) {
+            success = true;
+            break;
+        }
     }
-    if (!success) { current.shape = prevShape; current.pos = prevPos; }
-    else { handleMoveReset(); sync(); }
+
+    if (!success) {
+        current.type = oldType;
+        current.shape = oldShape;
+        current.pos = prevPos;
+    } else {
+        handleMoveReset();
+        sync();
+    }
 }
 
 function handleMoveReset() {
@@ -269,12 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('restart-button').onclick = resetGame;
 });
 
-// --- キーボードイベントの完全制御 ---
 window.addEventListener('keydown', e => {
     if(gameOver || !current) return;
     const k = e.key.toLowerCase();
-    
-    // すでに押されているキーは無視（OSのリピートを無効化）
     if (keyStates[k]) return;
     keyStates[k] = true;
 
@@ -283,10 +299,7 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { 
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
-        lockPiece(); 
-    }
+    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -298,7 +311,6 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// タッチ操作（ボタン長押し対応）
 const bindTouch = (id, keyName, action) => {
     const el = document.getElementById(id);
     if(!el) return;
@@ -316,7 +328,6 @@ bindTouch('ctrl-left', 'left', () => movePiece(-1));
 bindTouch('ctrl-right', 'right', () => movePiece(1));
 bindTouch('ctrl-down', 'down', drop);
 
-// その他ボタン
 const tap = (id, fn) => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false});
