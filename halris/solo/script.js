@@ -45,10 +45,9 @@ let rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0;
 
-// ★ 移動パラメータ
 const DAS_DELAY = 150; 
 const ARR_SPEED = 30;  
-const SOFT_DROP_SPEED = 10; // ★ ソフドロの速さ（小さいほど速い。0なら一瞬）
+const SOFT_DROP_SPEED = 15; 
 
 let keyStates = {}, moveTimers = {};   
 
@@ -86,15 +85,16 @@ function movePiece(dir) {
     handleMoveReset(); sync(); return true;
 }
 
-// ★ 移動用タイマー（ソフドロ速度対応版）
-function startAutoMove(key, action, interval = ARR_SPEED) {
+// ★ 移動用タイマー修正（待機時間ゼロのオプション追加）
+function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
     if (moveTimers[key]) return;
     action(); 
-    moveTimers[key] = { 
-        timeout: setTimeout(() => { 
-            moveTimers[key].interval = setInterval(action, interval); 
-        }, DAS_DELAY) 
-    };
+    if (useDas) {
+        moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, DAS_DELAY) };
+    } else {
+        // ★ ソフドロ用：即座にインターバル開始
+        moveTimers[key] = { interval: setInterval(action, interval) };
+    }
 }
 
 function stopAutoMove(key) { 
@@ -107,27 +107,34 @@ function stopAutoMove(key) {
 
 function rotate(dir = 1) {
     if (gameOver || !current) return;
-    const now = Date.now();
-    rotationTimestamps.push(now);
-    while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
+    
+    // ★ O-Spin判定を確実に一番上で処理
+    if (current.type === 'o') {
+        const now = Date.now();
+        rotationTimestamps.push(now);
+        while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
-    let evolved = false;
-    if (current.type === 'o' && rotationTimestamps.length >= O_SPIN_THRESHOLD) {
-        current.type = 'i_evolved';
-        current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
-        rotationState = 1; 
-        canvas.style.filter = 'brightness(2) saturate(2)';
-        setTimeout(() => { canvas.style.filter = 'none'; }, 150);
-        evolved = true;
+        if (rotationTimestamps.length >= O_SPIN_THRESHOLD) {
+            current.type = 'i_evolved';
+            current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
+            rotationState = 1; 
+            canvas.style.filter = 'brightness(2) saturate(2)';
+            setTimeout(() => { canvas.style.filter = 'none'; }, 150);
+            rotationTimestamps = []; // リセット
+            handleMoveReset(); sync();
+            return; // 進化時は回転処理をスキップして終了
+        }
     }
 
     const oldT = current.type, oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
+
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
+    
     rotationState = (rotationState + dir + 4) % 4;
 
     let success = false;
-    if (evolved || current.type === 'o') {
+    if (current.type === 'o' || current.type === 'i_evolved') {
         const simpleKicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1]];
         for (let k of simpleKicks) {
             current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
@@ -142,6 +149,7 @@ function rotate(dir = 1) {
             if (!collide(board, current)) { success = true; break; }
         }
     }
+
     if (!success) { current.type = oldT; current.shape = oldS; current.pos = oldP; rotationState = oldRS; }
     else { handleMoveReset(); sync(); }
 }
@@ -178,16 +186,7 @@ function spawn(type = null) {
     current = nextP; canHold = true; drawNext(); drawHold(); sync();
 }
 
-function drop() { 
-    if(gameOver || !current) return; 
-    current.pos.y++; 
-    if (collide(board, current)) { 
-        current.pos.y--; 
-    } else { 
-        resetLockTimer(); 
-        sync(); 
-    } 
-}
+function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) { current.pos.y--; } else { resetLockTimer(); sync(); } }
 
 function hold() {
     if (!canHold || gameOver) return;
@@ -247,7 +246,6 @@ function resetGame() {
 
 document.addEventListener('DOMContentLoaded', () => { document.getElementById('play').onclick = resetGame; document.getElementById('restart-button').onclick = resetGame; });
 
-// ★ キーボード入力
 window.addEventListener('keydown', e => {
     if(gameOver || !current) return;
     const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
@@ -255,8 +253,8 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
     
-    // ★ ソフトドロップを高速化
-    if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED);
+    // ★ ソフドロ：useDas = false で遊びをなくす
+    if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
@@ -271,15 +269,15 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// ★ タッチ入力（ソフドロ高速化対応）
-const bindT = (id, k, act, interval = ARR_SPEED) => {
+// スマホ
+const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act, interval); }, {passive:false});
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
     el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
 };
 bindT('ctrl-left', 'left', () => movePiece(-1));
 bindT('ctrl-right', 'right', () => movePiece(1));
-bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED); // ★ タッチ版ソフドロも爆速化
+bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false); // ★ スマホ版も即座にｽｰｰｰ
 
 const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
