@@ -20,11 +20,12 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
-const O_SPIN_THRESHOLD = 5; // 1秒間に必要な最低回転数
+const O_SPIN_THRESHOLD = 5; 
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00',
-    i_evolved: '#eeee00' 
+    i_evolved: '#eeee00',
+    o_huge: '#555555' // ハズレ枠は重々しいグレー
 };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
@@ -32,6 +33,7 @@ const SHAPES = {
 };
 
 const SHAPE_I_VERTICAL = [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]];
+const SHAPE_O_HUGE = [[1,1,1],[1,1,1],[1,1,1]]; // 3x3の巨大ミノ
 
 const SRS_KICKS = {
     "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]], "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
@@ -47,10 +49,7 @@ let rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0;
 
-const DAS_DELAY = 150; 
-const ARR_SPEED = 30;  
-const SOFT_DROP_SPEED = 15; 
-
+const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
 function sync(forceReset = false) {
@@ -90,63 +89,62 @@ function movePiece(dir) {
 function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
     if (moveTimers[key]) return;
     action(); 
-    if (useDas) {
-        moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, DAS_DELAY) };
-    } else {
-        moveTimers[key] = { interval: setInterval(action, interval) };
-    }
+    if (useDas) moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, DAS_DELAY) };
+    else moveTimers[key] = { interval: setInterval(action, interval) };
 }
 
-function stopAutoMove(key) { 
-    if (moveTimers[key]) { 
-        clearTimeout(moveTimers[key].timeout); 
-        clearInterval(moveTimers[key].interval); 
-        delete moveTimers[key]; 
-    } 
-}
+function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     
-    // Windows対応：O-Spin判定
+    // O-Spin 拡張判定
     if (current.type === 'o') {
         const now = Date.now();
         rotationTimestamps.push(now);
         while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
         if (rotationTimestamps.length >= O_SPIN_THRESHOLD) {
-            current.type = 'i_evolved';
-            current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
+            // 0.1%の確率で巨大化（ハズレ）、それ以外はI進化
+            if (Math.random() < 0.001) {
+                current.type = 'o_huge';
+                current.shape = JSON.parse(JSON.stringify(SHAPE_O_HUGE));
+                canvas.style.filter = 'contrast(3) grayscale(1)'; // 絶望感演出
+            } else {
+                current.type = 'i_evolved';
+                current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
+                canvas.style.filter = 'brightness(2) saturate(2)';
+            }
+            
             rotationState = 1; 
-            canvas.style.filter = 'brightness(2) saturate(2)';
-            setTimeout(() => { canvas.style.filter = 'none'; }, 150);
+            setTimeout(() => { canvas.style.filter = 'none'; }, 200);
             rotationTimestamps = [];
+            
+            // 巨大化時に重なったら即死
+            if (collide(board, current)) { showGameOver(); return; }
             handleMoveReset(); sync();
             return; 
         }
     }
 
     const oldT = current.type, oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
-
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
-    
     rotationState = (rotationState + dir + 4) % 4;
 
     let success = false;
-    // Oおよび進化Iは周囲を広めに探索してキックする
-    if (current.type === 'o' || current.type === 'i_evolved') {
-        const simpleKicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1], [-2,0], [2,0]];
-        for (let k of simpleKicks) {
+    // 特殊ミノは広範囲キック
+    if (current.type === 'o' || current.type === 'i_evolved' || current.type === 'o_huge') {
+        const kicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1], [-2,0], [2,0], [0,-2]];
+        for (let k of kicks) {
             current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y + k[1];
             if (!collide(board, current)) { success = true; break; }
         }
     } else {
         const key = `${oldRS}->${rotationState}`;
-        const kicks = SRS_KICKS[key] || [[0,0]];
-        for (let k of kicks) {
-            current.pos.x = oldP.x + k[0];
-            current.pos.y = oldP.y - k[1];
+        const srs = SRS_KICKS[key] || [[0,0]];
+        for (let k of srs) {
+            current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1];
             if (!collide(board, current)) { success = true; break; }
         }
     }
@@ -159,7 +157,7 @@ function handleMoveReset() {
     if (!current) return;
     if (collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
         if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); }
-    } else { resetLockTimer(); }
+    } else resetLockTimer();
 }
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
@@ -168,12 +166,13 @@ function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
     current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v) { let ny = current.pos.y + y; let nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
+        if (v) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
     }));
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB; score += (cleared === 4) ? 800 : cleared * 100;
+    board = nextB; 
+    score += (current.type === 'o_huge') ? cleared * 500 : (cleared === 4 ? 800 : cleared * 100);
     lockTimer = null; rotationTimestamps = []; spawn();
 }
 
@@ -187,12 +186,12 @@ function spawn(type = null) {
     current = nextP; canHold = true; drawNext(); drawHold(); sync();
 }
 
-function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) { current.pos.y--; } else { resetLockTimer(); sync(); } }
+function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) current.pos.y--; else { resetLockTimer(); sync(); } }
 
 function hold() {
     if (!canHold || gameOver) return;
-    let t = (holdPiece === 'i_evolved') ? 'i' : holdPiece;
-    holdPiece = (current.type === 'i_evolved') ? 'i' : current.type;
+    let t = (holdPiece === 'i_evolved' || holdPiece === 'o_huge') ? 'i' : holdPiece;
+    holdPiece = (current.type === 'i_evolved' || current.type === 'o_huge') ? 'i' : current.type;
     if (t) spawn(t); else spawn();
     canHold = false; drawHold();
 }
@@ -258,21 +257,15 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { 
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
-        lockPiece(); 
-    }
+    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
     if (k === 'c' || k === 'shift') hold();
 });
 
 window.addEventListener('keyup', e => {
     const k = e.key.toLowerCase(); keyStates[k] = false;
-    if (k === 'arrowleft') stopAutoMove('left'); 
-    if (k === 'arrowright') stopAutoMove('right'); 
-    if (k === 'arrowdown') stopAutoMove('down');
+    if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// スマホ対応
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
     el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
@@ -287,6 +280,4 @@ const tap = (id, fn) => {
     if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); 
 };
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
-tap('ctrl-rot-r', () => rotate(1)); 
-tap('ctrl-rot-l', () => rotate(-1)); 
-tap('ctrl-hold', hold);
+tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
