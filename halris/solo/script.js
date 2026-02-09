@@ -225,7 +225,7 @@ function update() {
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
     if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
     else if (!grounded) resetLockTimer();
-    ctx.fillStyle = '#333333'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
     board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
     if(current) { drawGhost(); current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); })); }
     requestID = requestAnimationFrame(update);
