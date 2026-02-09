@@ -23,9 +23,9 @@ const ROWS = 20, COLS = 10, SIZE = 24;
 const O_SPIN_THRESHOLD = 5; 
 
 const COLORS = { 
-    i:'#00eeee', o:'#eeee00', t:'#aa00ee', s:'#00ee00', z:'#ee0000', j:'#0000ee', l:'#eeaa00',
+    i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00',
     i_evolved: '#eeee00',
-    o_huge: '#555555' // ハズレ枠は重々しいグレー
+    o_huge: '#eeee00' // ハズレ枠は重々しいグレー
 };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
