@@ -99,9 +99,9 @@ function rotate(dir = 1) {
     if (gameOver || !current) return;
     
     const now = Date.now();
-    let justEvolved = false; // 進化したかどうかのフラグ
+    let justEvolved = false;
 
-    // --- 連打・進化判定 ---
+    // --- 連打・進化判定ロジック ---
     if (['o', 's', 'z'].includes(current.type)) {
         rotationTimestamps.push(now);
         while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) {
@@ -135,13 +135,13 @@ function rotate(dir = 1) {
         }
     }
 
-    // --- 回転・キック処理 ---
+    // --- 回転処理本体 ---
     const oldT = current.type, 
           oldS = JSON.parse(JSON.stringify(current.shape)), 
           oldP = {...current.pos}, 
           oldRS = rotationState;
 
-    // 通常の回転入力（進化していない場合）のみ行列を回す
+    // 進化していない時だけ行列を回す
     if (!justEvolved) {
         if (dir === 1) {
             current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
@@ -151,37 +151,40 @@ function rotate(dir = 1) {
         rotationState = (rotationState + dir + 4) % 4;
     }
 
+    // --- 【重要】ねじ込み判定（キック） ---
     let success = false;
-    // 進化中ミノ、または O, I, S, Z は「超強力キック」を適用
-    const isSpecial = current.isEvolvedToO || current.isEvolvedToI || ['o','i','s','z','o_huge'].includes(current.type);
+    
+    // 全てのミノに対して適用する強力なキックパターン
+    // 順番：その場 -> 下(ねじ込み) -> 左右(壁蹴り) -> 斜め下 -> 上
+    const kicks = [
+        [0,0],   [0,1],   [-1,0],  [1,0], 
+        [0,-1],  [-1,1],  [1,1],   [-2,0], 
+        [2,0],   [0,2],   [-1,-1], [1,-1]
+    ];
 
-    if (isSpecial) {
-        // 上下左右・斜めに加えて、さらに深く(2マス)まで探す
-        const kicks = [[0,0], [0,-1], [-1,0], [1,0], [0,1], [-1,-1], [1,-1], [-2,0], [2,0], [0,-2]];
-        for (let k of kicks) {
-            current.pos.x = oldP.x + k[0]; 
-            current.pos.y = oldP.y + k[1];
-            if (!collide(board, current)) { success = true; break; }
-        }
-    } else {
-        // T, J, L ミノは標準SRS
-        const key = `${oldRS}->${rotationState}`;
-        const srs = SRS_KICKS[key] || [[0,0]];
-        for (let k of srs) {
-            current.pos.x = oldP.x + k[0]; 
-            current.pos.y = oldP.y - k[1];
-            if (!collide(board, current)) { success = true; break; }
+    // 特殊ミノ（進化後）やIミノの場合はさらに判定を広げる
+    if (current.isEvolvedToO || current.isEvolvedToI || ['i','o','s','z'].includes(current.type)) {
+        kicks.push([0,-2], [-2,1], [2,1]);
+    }
+
+    // 全てのキックパターンを試す
+    for (let k of kicks) {
+        current.pos.x = oldP.x + k[0]; 
+        current.pos.y = oldP.y + k[1];
+        if (!collide(board, current)) { 
+            success = true; 
+            break; 
         }
     }
 
+    // どこを試してもダメだった場合は元に戻す
     if (!success) { 
-        // どこにもはまらなかった場合、進化もキャンセルして元に戻す
         current.type = oldT; 
         current.shape = oldS; 
         current.pos = oldP; 
         rotationState = oldRS; 
         if (justEvolved) {
-            current.isEvolvedToO = oldS.length === 2; // 形で判定を戻す
+            current.isEvolvedToO = (oldS.length === 2 && oldS[0].length === 2);
             current.isEvolvedToI = false;
         }
     } else { 
@@ -189,7 +192,6 @@ function rotate(dir = 1) {
         sync(); 
     }
 }
-
 
 function handleMoveReset() {
     if (!current) return;
