@@ -24,8 +24,7 @@ const O_SPIN_THRESHOLD = 5;
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00',
-    i_evolved: '#eeee00',
-    o_huge: '#eeee00' // ハズレ枠は重々しいグレー
+    i_evolved: '#eeee00', o_huge: '#eeee00'
 };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
@@ -33,13 +32,22 @@ const SHAPES = {
 };
 
 const SHAPE_I_VERTICAL = [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]];
-const SHAPE_O_HUGE = [[1,1,1],[1,1,1],[1,1,1]]; // 3x3の巨大ミノ
+const SHAPE_O_HUGE = [[1,1,1],[1,1,1],[1,1,1]];
 
+// 標準SRSキックデータ（T, J, L, S, Z用）
 const SRS_KICKS = {
     "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]], "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
     "1->2": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]], "2->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
     "2->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
     "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]], "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
+};
+
+// Iミノ専用SRSキックデータ
+const SRS_KICKS_I = {
+    "0->1": [[0,0], [-2,0], [ 1,0], [-2,-1], [ 1, 2]], "1->0": [[0,0], [ 2,0], [-1,0], [ 2, 1], [-1,-2]],
+    "1->2": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]], "2->1": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]],
+    "2->3": [[0,0], [ 2,0], [-1,0], [ 2, 1], [-1,-2]], "3->2": [[0,0], [-2,0], [ 1,0], [-2,-1], [ 1, 2]],
+    "3->0": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]], "0->3": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]]
 };
 
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
@@ -95,101 +103,76 @@ function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
 
 function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
+// --- 改良版回転関数 ---
 function rotate(dir = 1) {
     if (gameOver || !current) return;
     
     const now = Date.now();
     let justEvolved = false;
 
-    // --- 連打・進化判定ロジック ---
+    // 1. 連打・進化判定
     if (['o', 's', 'z'].includes(current.type)) {
         rotationTimestamps.push(now);
-        while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) {
-            rotationTimestamps.shift();
-        }
+        while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
 
         if (rotationTimestamps.length >= O_SPIN_THRESHOLD) {
             if (!current.isEvolvedToO && (current.type === 's' || current.type === 'z')) {
                 current.shape = JSON.parse(JSON.stringify(SHAPES['o']));
                 current.isEvolvedToO = true;
-                canvas.style.filter = 'hue-rotate(90deg) brightness(1.5)'; 
                 justEvolved = true;
-            } 
-            else if (current.type === 'o' || current.isEvolvedToO) {
+            } else if (current.type === 'o' || current.isEvolvedToO) {
                 if (Math.random() < 0.001) {
                     current.shape = JSON.parse(JSON.stringify(SHAPE_O_HUGE));
-                    current.type = 'o_huge'; 
-                    canvas.style.filter = 'contrast(3) grayscale(1)';
+                    current.type = 'o_huge';
                 } else {
                     current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
                     current.isEvolvedToI = true;
-                    canvas.style.filter = 'brightness(2) saturate(2)';
                 }
                 justEvolved = true;
             }
             if (justEvolved) {
-                rotationState = 1; 
-                setTimeout(() => { canvas.style.filter = 'none'; }, 200);
-                rotationTimestamps = []; 
+                canvas.style.filter = 'brightness(1.5)';
+                setTimeout(() => canvas.style.filter = 'none', 150);
+                rotationTimestamps = [];
+                // 進化時はキック判定のみ行う（行列回転はしない）
             }
         }
     }
 
-    // --- 回転処理本体 ---
-    const oldT = current.type, 
-          oldS = JSON.parse(JSON.stringify(current.shape)), 
-          oldP = {...current.pos}, 
-          oldRS = rotationState;
+    const oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
 
-    // 進化していない時だけ行列を回す
+    // 2. 通常の行列回転（進化してない場合）
     if (!justEvolved) {
-        if (dir === 1) {
-            current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-        } else {
-            current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
-        }
+        if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
+        else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
         rotationState = (rotationState + dir + 4) % 4;
     }
 
-    // --- 【重要】ねじ込み判定（キック） ---
+    // 3. キック判定（ねじ込み）
     let success = false;
-    
-    // 全てのミノに対して適用する強力なキックパターン
-    // 順番：その場 -> 下(ねじ込み) -> 左右(壁蹴り) -> 斜め下 -> 上
-    const kicks = [
-        [0,0],   [0,1],   [-1,0],  [1,0], 
-        [0,-1],  [-1,1],  [1,1],   [-2,0], 
-        [2,0],   [0,2],   [-1,-1], [1,-1]
-    ];
+    let kickSet = [];
 
-    // 特殊ミノ（進化後）やIミノの場合はさらに判定を広げる
-    if (current.isEvolvedToO || current.isEvolvedToI || ['i','o','s','z'].includes(current.type)) {
-        kicks.push([0,-2], [-2,1], [2,1]);
+    if (current.type === 'i' || current.isEvolvedToI) {
+        kickSet = SRS_KICKS_I[`${oldRS}->${rotationState}`] || [[0,0]];
+    } else if (current.type === 'o' || current.type === 'o_huge' || current.isEvolvedToO) {
+        // Oミノ系列は周囲を探す特殊キック
+        kickSet = [[0,0], [0,1], [-1,0], [1,0], [0,-1], [-1,1], [1,1], [-2,0], [2,0]];
+    } else {
+        // T, J, L, S, Z 用
+        kickSet = SRS_KICKS[`${oldRS}->${rotationState}`] || [[0,0]];
     }
 
-    // 全てのキックパターンを試す
-    for (let k of kicks) {
-        current.pos.x = oldP.x + k[0]; 
-        current.pos.y = oldP.y + k[1];
-        if (!collide(board, current)) { 
-            success = true; 
-            break; 
-        }
+    for (let k of kickSet) {
+        current.pos.x = oldP.x + k[0];
+        current.pos.y = oldP.y - k[1]; // SRSは上がプラスなので座標系に合わせてマイナス
+        if (!collide(board, current)) { success = true; break; }
     }
 
-    // どこを試してもダメだった場合は元に戻す
-    if (!success) { 
-        current.type = oldT; 
-        current.shape = oldS; 
-        current.pos = oldP; 
-        rotationState = oldRS; 
-        if (justEvolved) {
-            current.isEvolvedToO = (oldS.length === 2 && oldS[0].length === 2);
-            current.isEvolvedToI = false;
-        }
-    } else { 
-        handleMoveReset(); 
-        sync(); 
+    if (!success) {
+        current.shape = oldS; current.pos = oldP; rotationState = oldRS;
+        if (justEvolved) { current.isEvolvedToO = (oldS.length === 2 && oldS[0].length === 2); current.isEvolvedToI = false; }
+    } else {
+        handleMoveReset(); sync();
     }
 }
 
