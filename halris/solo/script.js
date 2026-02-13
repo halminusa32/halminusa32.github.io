@@ -20,7 +20,7 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const ROWS = 20, COLS = 10, SIZE = 24;
-const O_SPIN_THRESHOLD = 5; 
+const O_SPIN_THRESHOLD = 10; 
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00',
