@@ -121,7 +121,7 @@ function rotate(dir = 1) {
                 current.isEvolvedToO = true;
                 justEvolved = true;
             } else if (current.type === 'o' || current.isEvolvedToO) {
-                if (Math.random() < 0.001) {
+                if (Math.random() < 0.1) {
                     current.shape = JSON.parse(JSON.stringify(SHAPE_O_HUGE));
                     current.type = 'o_huge';
                 } else {
