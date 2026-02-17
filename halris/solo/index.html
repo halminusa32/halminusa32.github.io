@@ -7,7 +7,12 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>HALRIS SOLO<br>O-Spin→I<br>S/Z-Spin→O<br>S/Z-Spinで出来たOをSpin→I<br>Oは5%の確率で3x3のゴツゴツのOミノになる</h1>
+    <div id="side-info">
+        <h1>HALRIS SOLO</h1>
+        <p>O-Spin→I / S/Z-Spin→O<br>
+           S/Z-O-Spin→I<br>
+           O: 5% GotsuGotsu O</p>
+    </div>
     
     <div id="room-setup">
         <p style="margin-bottom: 20px; font-size: 18px;">プレイを開始しますか？</p>
@@ -28,25 +33,27 @@
         </div>
     </div>
 
-    <div id="game-over-screen" style="display: none; position: absolute; background: rgba(0,0,0,0.8); color: white; width: 100%; height: 100%; top: 0; left: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;">
+    <div id="game-over-screen" style="display: none;">
         <h2 style="font-size: 40px; margin-bottom: 20px;">GAME OVER</h2>
         <button id="restart-button" class="btn gray" style="width: 150px; height: 50px; border-radius: 10px; font-size: 18px;">RESTART</button>
     </div>
 
-
     <div class="touch-controls">
-        <div class="control-row">
-            <button id="ctrl-hold" class="btn gray" style="width:80px">HOLD</button>
-            <button id="ctrl-up" class="btn blue">HARD DROP</button>
-        </div>
-        <div class="control-row">
-            <button id="ctrl-left" class="btn">←</button>
-            <button id="ctrl-down" class="btn">↓</button>
-            <button id="ctrl-right" class="btn">→</button>
-            <div class="rotate-group">
-                <button id="ctrl-rot-l" class="btn purple">Z</button>
-                <button id="ctrl-rot-r" class="btn purple">X</button>
+        <div class="control-left-group">
+            <button id="ctrl-hold" class="btn gray" style="margin-bottom: 10px;">HOLD</button>
+            <div class="d-pad">
+                <button id="ctrl-up" class="btn blue">HARD DROP</button>
+                <div class="move-row">
+                    <button id="ctrl-left" class="btn">←</button>
+                    <button id="ctrl-right" class="btn">→</button>
+                </div>
+                <button id="ctrl-down" class="btn">↓</button>
             </div>
+        </div>
+
+        <div class="control-right-group">
+            <button id="ctrl-rot-l" class="btn purple">Z</button>
+            <button id="ctrl-rot-r" class="btn purple">X</button>
         </div>
     </div>
 
