@@ -1,13 +1,28 @@
-body { background: #000; color: #fff; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; }
+body { 
+    background: #000; color: #fff; font-family: monospace; 
+    display: flex; flex-direction: column; align-items: center; justify-content: center; 
+    min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; 
+}
+
+/* タイトルを左端に固定 */
+#side-info {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    text-align: left;
+    pointer-events: none;
+}
+#side-info h1 { font-size: 18px; color: #ff3333; margin: 0; }
+#side-info p { font-size: 10px; color: #888; }
+
 #room-setup { background: #111; padding: 40px; border-radius: 12px; border: 2px solid #333; text-align: center; }
 #game-container { display: flex; gap: 20px; background: #111; padding: 20px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
 .player-section { display: flex; flex-direction: column; align-items: center; }
 .side { width: 70px; }
-canvas { background: #333333; border: 1px solid #333; }
-#hold-canvas, #next-canvas { background: #000; border: 1px solid #222; }
+canvas { background: #1a1a1a; border: 1px solid #333; }
 .label { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
 
-/* ゲームオーバー画面（初期状態は非表示） */
+/* ゲームオーバー画面 */
 #game-over-screen {
     display: none; 
     position: fixed;
@@ -21,25 +36,41 @@ canvas { background: #333333; border: 1px solid #333; }
     z-index: 1000;
 }
 
-#game-over-screen h2 {
-    font-size: 3em;
-    margin-bottom: 30px;
-    color: #ff3333;
-    animation: pulse 1.5s infinite;
+/* --- 横持ち用コントローラー --- */
+.touch-controls {
+    position: fixed;
+    bottom: 20px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 40px;
+    box-sizing: border-box;
+    pointer-events: none;
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.05); opacity: 0.8; }
-    100% { transform: scale(1); opacity: 1; }
+.control-left-group, .control-right-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
 }
 
-.touch-controls { display: none; margin-top: 15px; flex-direction: column; gap: 8px; }
-@media (max-width: 600px) { #game-container { scale: 0.8; } .touch-controls { display: flex; } }
+.d-pad { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.move-row { display: flex; gap: 40px; }
 
-.control-row { display: flex; justify-content: center; gap: 10px; }
-.btn { width: 60px; height: 60px; border-radius: 50%; border: none; background: #333; color: #fff; font-weight: bold; cursor: pointer; }
-.btn:active { background: #555; }
-.blue { background: #007bff; width: 130px; border-radius: 10px; }
-.purple { background: #6f42c1; }
-.gray { width: 80px; border-radius: 10px; font-size: 14px; }
+/* ボタンの共通スタイル */
+.btn { 
+    width: 65px; height: 65px; border-radius: 50%; border: 2px solid #444; 
+    background: rgba(50, 50, 50, 0.8); color: #fff; font-weight: bold; 
+    cursor: pointer; user-select: none;
+}
+.btn:active { background: #777; transform: scale(0.9); }
+.blue { background: rgba(0, 123, 255, 0.7); width: 100px; border-radius: 10px; height: 50px; }
+.purple { background: rgba(111, 66, 193, 0.7); width: 80px; height: 80px; font-size: 24px; }
+.gray { width: 80px; height: 40px; border-radius: 10px; font-size: 14px; background: #333; }
+
+/* PC時は非表示、スマホ(横持ち含む)で表示 */
+@media (max-width: 900px) {
+    .touch-controls { display: flex; }
+    #game-container { scale: 0.8; }
+}
