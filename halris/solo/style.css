@@ -1,3 +1,31 @@
+/* フォントファイルの読み込み設定 */
+@font-face {
+    font-family: 'Keifont';
+    src: url('https://halminusa32.github.io/fonts/keifont.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'NicoMoji';
+    src: url('https://halminusa32.github.io/fonts/nicomoji-plus_v2-5.ttf') format('truetype'); /* ファイル名は実際の名称に合わせてください */
+}
+
+/* タイトルに適用 */
+#side-info h1 { 
+    font-family: 'NicoMoji', sans-serif; /* ここで読み込んだ名前を指定 */
+    font-size: 24px; 
+    color: #ff3333; 
+    margin: 0;
+    text-shadow: 2px 2px 0px #000;
+}
+
+#side-info p { 
+    font-family: 'NicoMoji', sans-serif; /* 説明文はニコモジにするなど */
+    font-size: 12px; 
+    color: #bbb; 
+    margin-top: 5px;
+    line-height: 1.4;
+}
+
 body { 
     background: #000; color: #fff; font-family: monospace; 
     display: flex; flex-direction: column; align-items: center; justify-content: center; 
