@@ -46,11 +46,17 @@ const SRS_KICKS_I = {
     "3->0": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]], "0->3": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]]
 };
 
+// ゲーム状態変数
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
-let rotationTimestamps = [], score = 0, totalLines = 0; // totalLines追加
+let rotationTimestamps = [], score = 0, totalLines = 0;
+
+// ぷよテト2用追加変数
+let comboCount = -1; // 消してないときは-1
+let isBackToBack = false;
+
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
@@ -147,9 +153,52 @@ function handleMoveReset() {
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
 
+// スコア計算ロジック（ぷよテト2基準）
+function calculateScore(cleared, isSpin) {
+    let base = 0;
+    let isDifficult = false;
+
+    if (isSpin) { // T-Spinなどの特殊回転消し
+        isDifficult = true;
+        if (cleared === 0) base = 100;
+        else if (cleared === 1) base = 800;
+        else if (cleared === 2) base = 1200;
+        else if (cleared === 3) base = 1600;
+    } else {
+        if (cleared === 1) base = 100;
+        else if (cleared === 2) base = 300;
+        else if (cleared === 3) base = 500;
+        else if (cleared === 4) { base = 800; isDifficult = true; }
+    }
+
+    // Back-to-Back (B2B) 判定
+    if (cleared > 0) {
+        if (isDifficult) {
+            if (isBackToBack) base *= 1.5;
+            isBackToBack = true;
+        } else {
+            isBackToBack = false;
+        }
+        comboCount++;
+    } else {
+        comboCount = -1;
+    }
+
+    // Comboボーナス
+    if (comboCount > 0) {
+        base += comboCount * 50;
+    }
+
+    // Huge O 特典
+    if (current.type === 'o_huge') base += 1000;
+
+    return Math.floor(base);
+}
+
 function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
+    
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
     }));
@@ -157,15 +206,18 @@ function lockPiece() {
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
 
-    // ライン消去カウントとUI更新
-    if (cleared > 0) {
-        totalLines += cleared;
-        document.getElementById('line-count').innerText = totalLines;
-    }
+    // スコアとラインの更新
+    const isSpin = (rotationTimestamps.length > 0); // 回転直後ならスピン判定（簡易版）
+    score += calculateScore(cleared, isSpin);
+    totalLines += cleared;
+
+    // UI更新
+    document.getElementById('line-count').innerText = totalLines;
+    document.getElementById('score-display').innerText = score;
 
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
-    score += (current.type === 'o_huge') ? cleared * 500 : (cleared === 4 ? 800 : cleared * 100);
+    
     lockTimer = null; rotationTimestamps = []; spawn();
 }
 
@@ -231,8 +283,10 @@ function resetGame() {
     document.getElementById('game-container').style.display = 'flex';
     if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; score = 0; totalLines = 0; rotationTimestamps = [];
+    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; 
+    score = 0; totalLines = 0; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
     document.getElementById('line-count').innerText = "0";
+    document.getElementById('score-display').innerText = "0";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
 }
