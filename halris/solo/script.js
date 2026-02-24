@@ -356,7 +356,7 @@ tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ct
 const SOUND_FILES = {
     move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    clear: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
