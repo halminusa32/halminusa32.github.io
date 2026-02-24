@@ -328,3 +328,31 @@ const tap = (id, fn) => {
 };
 tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
+
+// ==========================================
+// SE（効果音）管理セクション
+// ==========================================
+const SOUND_FILES = {
+    move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
+    rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
+    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
+    harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
+    hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
+    perfect: 'https://actions.google.com/sounds/v1/cartoon/flute_twirl_up.ogg',
+    gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
+};
+
+const audioCache = {};
+
+function playSound(name) {
+    if (!SOUND_FILES[name]) return;
+    if (!audioCache[name]) {
+        audioCache[name] = new Audio(SOUND_FILES[name]);
+        audioCache[name].volume = 0.5;
+    }
+    const sound = audioCache[name];
+    sound.currentTime = 0;
+    sound.play().catch(e => {}); 
+}
