@@ -91,6 +91,7 @@ function movePiece(dir) {
     if (gameOver || !current) return;
     current.pos.x += dir;
     if (collide(board, current)) { current.pos.x -= dir; return false; }
+    playSound('move'); // 移動音追加
     handleMoveReset(); sync(); return true;
 }
 
@@ -141,7 +142,7 @@ function rotate(dir = 1) {
         if (!collide(board, current)) { success = true; break; }
     }
     if (!success) { current.shape = oldS; current.pos = oldP; rotationState = oldRS; } 
-    else { handleMoveReset(); sync(); }
+    else { playSound('rotate'); handleMoveReset(); sync(); } // 回転音追加
 }
 
 function handleMoveReset() {
@@ -253,6 +254,7 @@ function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(
 
 function hold() {
     if (!canHold || gameOver) return;
+    playSound('hold'); // ホールド音追加
     let t = (holdPiece === 'i_evolved' || holdPiece === 'o_huge') ? 'i' : holdPiece;
     holdPiece = (current.type === 'i_evolved' || current.type === 'o_huge') ? 'i' : current.type;
     if (t) spawn(t); else spawn();
@@ -294,7 +296,7 @@ function update() {
     requestID = requestAnimationFrame(update);
 }
 
-function showGameOver() { gameOver = true; if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID); document.getElementById('game-over-screen').style.display = 'flex'; }
+function showGameOver() { gameOver = true; if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID); playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
     document.getElementById('game-over-screen').style.display = 'none';
@@ -323,7 +325,7 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === ' ') { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -345,7 +347,7 @@ const tap = (id, fn) => {
     const el = document.getElementById(id); 
     if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); 
 };
-tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
+tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 // ==========================================
@@ -364,14 +366,23 @@ const SOUND_FILES = {
 };
 
 const audioCache = {};
+let lastMoveSoundTime = 0;
 
 function playSound(name) {
     if (!SOUND_FILES[name]) return;
+    const now = Date.now();
+    
+    // 移動音は50ms以内の連続再生を制限（DAS中のノイズ防止）
+    if (name === 'move' && now - lastMoveSoundTime < 50) return;
+    if (name === 'move') lastMoveSoundTime = now;
+
     if (!audioCache[name]) {
         audioCache[name] = new Audio(SOUND_FILES[name]);
-        audioCache[name].volume = 0.5;
+        audioCache[name].volume = (name === 'move') ? 0.3 : 0.5;
     }
-    const sound = audioCache[name];
-    sound.currentTime = 0;
-    sound.play().catch(e => {}); 
+    
+    // 連続で重なってもいいようにクローンを再生
+    const soundClone = audioCache[name].cloneNode();
+    soundClone.volume = audioCache[name].volume;
+    soundClone.play().catch(e => {});
 }
