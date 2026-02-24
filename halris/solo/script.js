@@ -30,19 +30,15 @@ const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
-
 const SHAPE_I_VERTICAL = [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]];
 const SHAPE_O_HUGE = [[1,1,1],[1,1,1],[1,1,1]];
 
-// 標準SRSキックデータ（T, J, L, S, Z用）
 const SRS_KICKS = {
     "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]], "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
     "1->2": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]], "2->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
     "2->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
     "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]], "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
 };
-
-// Iミノ専用SRSキックデータ
 const SRS_KICKS_I = {
     "0->1": [[0,0], [-2,0], [ 1,0], [-2,-1], [ 1, 2]], "1->0": [[0,0], [ 2,0], [-1,0], [ 2, 1], [-1,-2]],
     "1->2": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]], "2->1": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]],
@@ -52,11 +48,9 @@ const SRS_KICKS_I = {
 
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
-let lockTimer = null, gameInterval = null, requestID = null;
-let rotationState = 0, lockResetCount = 0;
+let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
-let rotationTimestamps = [], score = 0;
-
+let rotationTimestamps = [], score = 0, totalLines = 0; // totalLines追加
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
@@ -103,77 +97,45 @@ function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
 
 function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
-// --- 改良版回転関数 ---
 function rotate(dir = 1) {
     if (gameOver || !current) return;
-    
     const now = Date.now();
     let justEvolved = false;
 
-    // 1. 連打・進化判定
     if (['o', 's', 'z'].includes(current.type)) {
         rotationTimestamps.push(now);
         while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
-
         if (rotationTimestamps.length >= O_SPIN_THRESHOLD) {
             if (!current.isEvolvedToO && (current.type === 's' || current.type === 'z')) {
                 current.shape = JSON.parse(JSON.stringify(SHAPES['o']));
-                current.isEvolvedToO = true;
-                justEvolved = true;
+                current.isEvolvedToO = true; justEvolved = true;
             } else if (current.type === 'o' || current.isEvolvedToO) {
-                if (Math.random() < 0.05) {
-                    current.shape = JSON.parse(JSON.stringify(SHAPE_O_HUGE));
-                    current.type = 'o_huge';
-                } else {
-                    current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL));
-                    current.isEvolvedToI = true;
-                }
+                if (Math.random() < 0.05) { current.shape = JSON.parse(JSON.stringify(SHAPE_O_HUGE)); current.type = 'o_huge'; }
+                else { current.shape = JSON.parse(JSON.stringify(SHAPE_I_VERTICAL)); current.isEvolvedToI = true; }
                 justEvolved = true;
             }
-            if (justEvolved) {
-                canvas.style.filter = 'brightness(1.5)';
-                setTimeout(() => canvas.style.filter = 'none', 150);
-                rotationTimestamps = [];
-                // 進化時はキック判定のみ行う（行列回転はしない）
-            }
+            if (justEvolved) { canvas.style.filter = 'brightness(1.5)'; setTimeout(() => canvas.style.filter = 'none', 150); rotationTimestamps = []; }
         }
     }
 
     const oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
-
-    // 2. 通常の行列回転（進化してない場合）
     if (!justEvolved) {
         if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
         else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
         rotationState = (rotationState + dir + 4) % 4;
     }
 
-    // 3. キック判定（ねじ込み）
-    let success = false;
-    let kickSet = [];
-
-    if (current.type === 'i' || current.isEvolvedToI) {
-        kickSet = SRS_KICKS_I[`${oldRS}->${rotationState}`] || [[0,0]];
-    } else if (current.type === 'o' || current.type === 'o_huge' || current.isEvolvedToO) {
-        // Oミノ系列は周囲を探す特殊キック
-        kickSet = [[0,0], [0,1], [-1,0], [1,0], [0,-1], [-1,1], [1,1], [-2,0], [2,0]];
-    } else {
-        // T, J, L, S, Z 用
-        kickSet = SRS_KICKS[`${oldRS}->${rotationState}`] || [[0,0]];
-    }
+    let success = false, kickSet = [];
+    if (current.type === 'i' || current.isEvolvedToI) kickSet = SRS_KICKS_I[`${oldRS}->${rotationState}`] || [[0,0]];
+    else if (current.type === 'o' || current.type === 'o_huge' || current.isEvolvedToO) kickSet = [[0,0], [0,1], [-1,0], [1,0], [0,-1], [-1,1], [1,1], [-2,0], [2,0]];
+    else kickSet = SRS_KICKS[`${oldRS}->${rotationState}`] || [[0,0]];
 
     for (let k of kickSet) {
-        current.pos.x = oldP.x + k[0];
-        current.pos.y = oldP.y - k[1]; // SRSは上がプラスなので座標系に合わせてマイナス
+        current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1];
         if (!collide(board, current)) { success = true; break; }
     }
-
-    if (!success) {
-        current.shape = oldS; current.pos = oldP; rotationState = oldRS;
-        if (justEvolved) { current.isEvolvedToO = (oldS.length === 2 && oldS[0].length === 2); current.isEvolvedToI = false; }
-    } else {
-        handleMoveReset(); sync();
-    }
+    if (!success) { current.shape = oldS; current.pos = oldP; rotationState = oldRS; } 
+    else { handleMoveReset(); sync(); }
 }
 
 function handleMoveReset() {
@@ -191,8 +153,16 @@ function lockPiece() {
     current.shape.forEach((r,y) => r.forEach((v,x) => {
         if (v) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
     }));
+    
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
+
+    // ライン消去カウントとUI更新
+    if (cleared > 0) {
+        totalLines += cleared;
+        document.getElementById('line-count').innerText = totalLines;
+    }
+
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
     score += (current.type === 'o_huge') ? cleared * 500 : (cleared === 4 ? 800 : cleared * 100);
@@ -201,8 +171,7 @@ function lockPiece() {
 
 function spawn(type = null) {
     resetLockTimer(); lockResetCount = 0; rotationState = 0;
-    let t = type || nextQueue.shift();
-    updateNextQueue();
+    let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
     if (collide(board, nextP)) { showGameOver(); return; }
@@ -262,7 +231,8 @@ function resetGame() {
     document.getElementById('game-container').style.display = 'flex';
     if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; score = 0; rotationTimestamps = [];
+    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; score = 0; totalLines = 0; rotationTimestamps = [];
+    document.getElementById('line-count').innerText = "0";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
 }
