@@ -206,8 +206,27 @@ function lockPiece() {
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
 
+    // --- ここから追加：SE再生とパフェ判定 ---
+    if (cleared > 0) {
+        if (cleared === 4) {
+            playSound('tetris'); // 4列消し音
+        } else {
+            playSound('clear');  // 通常消し音
+        }
+
+        // パフェ判定（消した後のボードが完全に空かチェック）
+        const isAllClear = nextB.length === 0;
+        if (isAllClear) {
+            score += 3500; // ぷよテト2基準ボーナス
+            playSound('perfect');
+        }
+    } else {
+        playSound('lock'); // 消去なしで設置した時の音
+    }
+    // --- ここまで追加 ---
+
     // スコアとラインの更新
-    const isSpin = (rotationTimestamps.length > 0); // 回転直後ならスピン判定（簡易版）
+    const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
 
