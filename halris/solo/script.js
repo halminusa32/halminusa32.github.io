@@ -46,23 +46,31 @@ const SRS_KICKS_I = {
     "3->0": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]], "0->3": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]]
 };
 
-// ゲーム状態変数
 let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
-
-// ぷよテト2用追加変数
-let comboCount = -1; // 消してないときは-1
-let isBackToBack = false;
+let comboCount = -1, isBackToBack = false;
 
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
+// 同期頻度の制限用
+let lastSyncedPos = {x: 0, y: 0, r: 0};
+
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
-    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current.pos, type: current.type, shape: current.shape };
+    if (!forceReset && current && 
+        lastSyncedPos.x === current.pos.x && 
+        lastSyncedPos.y === current.pos.y && 
+        lastSyncedPos.r === rotationState) return;
+
+    if (current) lastSyncedPos = {x: current.pos.x, y: current.pos.y, r: rotationState};
+    
+    const data = forceReset ? 
+        { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : 
+        { board, pos: current.pos, type: current.type, shape: current.shape };
     set(ref(db, `games/${roomId}/player`), data);
 }
 
@@ -91,7 +99,7 @@ function movePiece(dir) {
     if (gameOver || !current) return;
     current.pos.x += dir;
     if (collide(board, current)) { current.pos.x -= dir; return false; }
-    playSound('move'); // 移動音追加
+    playSound('move');
     handleMoveReset(); sync(); return true;
 }
 
@@ -142,7 +150,7 @@ function rotate(dir = 1) {
         if (!collide(board, current)) { success = true; break; }
     }
     if (!success) { current.shape = oldS; current.pos = oldP; rotationState = oldRS; } 
-    else { playSound('rotate'); handleMoveReset(); sync(); } // 回転音追加
+    else { playSound('rotate'); handleMoveReset(); sync(); }
 }
 
 function handleMoveReset() {
@@ -154,12 +162,9 @@ function handleMoveReset() {
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
 
-// スコア計算ロジック（ぷよテト2基準）
 function calculateScore(cleared, isSpin) {
-    let base = 0;
-    let isDifficult = false;
-
-    if (isSpin) { // T-Spinなどの特殊回転消し
+    let base = 0, isDifficult = false;
+    if (isSpin) {
         isDifficult = true;
         if (cleared === 0) base = 100;
         else if (cleared === 1) base = 800;
@@ -171,28 +176,12 @@ function calculateScore(cleared, isSpin) {
         else if (cleared === 3) base = 500;
         else if (cleared === 4) { base = 800; isDifficult = true; }
     }
-
-    // Back-to-Back (B2B) 判定
     if (cleared > 0) {
-        if (isDifficult) {
-            if (isBackToBack) base *= 1.5;
-            isBackToBack = true;
-        } else {
-            isBackToBack = false;
-        }
-        comboCount++;
-    } else {
-        comboCount = -1;
-    }
-
-    // Comboボーナス
-    if (comboCount > 0) {
-        base += comboCount * 50;
-    }
-
-    // Huge O 特典
+        if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; }
+        else isBackToBack = false;
+        comboCount++; base += comboCount * 50;
+    } else comboCount = -1;
     if (current.type === 'o_huge') base += 1000;
-
     return Math.floor(base);
 }
 
@@ -200,44 +189,32 @@ function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
     
-    current.shape.forEach((r,y) => r.forEach((v,x) => {
-        if (v) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
-    }));
+    for (let y=0; y<current.shape.length; y++) {
+        for (let x=0; x<current.shape[y].length; x++) {
+            if (current.shape[y][x]) {
+                let ny = current.pos.y + y, nx = current.pos.x + x;
+                if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type];
+            }
+        }
+    }
     
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
 
-    // --- ここから追加：SE再生とパフェ判定 ---
     if (cleared > 0) {
-        if (cleared === 4) {
-            playSound('tetris'); // 4列消し音
-        } else {
-            playSound('clear');  // 通常消し音
-        }
+        if (cleared === 4) playSound('tetris'); else playSound('clear');
+        if (nextB.length === 0) { score += 3500; playSound('perfect'); }
+    } else playSound('lock');
 
-        // パフェ判定（消した後のボードが完全に空かチェック）
-        const isAllClear = nextB.length === 0;
-        if (isAllClear) {
-            score += 3500; // ぷよテト2基準ボーナス
-            playSound('perfect');
-        }
-    } else {
-        playSound('lock'); // 消去なしで設置した時の音
-    }
-    // --- ここまで追加 ---
-
-    // スコアとラインの更新
     const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
 
-    // UI更新
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
 
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
-    
     lockTimer = null; rotationTimestamps = []; spawn();
 }
 
@@ -254,7 +231,7 @@ function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(
 
 function hold() {
     if (!canHold || gameOver) return;
-    playSound('hold'); // ホールド音追加
+    playSound('hold');
     let t = (holdPiece === 'i_evolved' || holdPiece === 'o_huge') ? 'i' : holdPiece;
     holdPiece = (current.type === 'i_evolved' || current.type === 'o_huge') ? 'i' : current.type;
     if (t) spawn(t); else spawn();
@@ -267,13 +244,21 @@ function drawGhost() {
     if (!current) return;
     let g = { ...current.pos };
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
-    current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }));
+    for (let y=0; y<current.shape.length; y++) {
+        for (let x=0; x<current.shape[y].length; x++) {
+            if (current.shape[y][x] && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2);
+        }
+    }
 }
 
 function drawHold() {
     hCtx.clearRect(0,0,hCanvas.width,hCanvas.height); if (!holdPiece) return;
     const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
-    SHAPES[holdPiece].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15); }));
+    for (let y=0; y<SHAPES[holdPiece].length; y++) {
+        for (let x=0; x<SHAPES[holdPiece][y].length; x++) {
+            if (SHAPES[holdPiece][y][x]) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15);
+        }
+    }
 }
 
 function drawNext() {
@@ -281,7 +266,11 @@ function drawNext() {
     for(let i=0; i<4; i++) {
         let t = nextQueue[i]; if(!t) continue;
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        SHAPES[t].forEach((r,y)=>r.forEach((v,x)=>{ if(v) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15); }));
+        for (let y=0; y<SHAPES[t].length; y++) {
+            for (let x=0; x<SHAPES[t][y].length; x++) {
+                if (SHAPES[t][y][x]) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15);
+            }
+        }
     }
 }
 
@@ -290,13 +279,25 @@ function update() {
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
     if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
     else if (!grounded) resetLockTimer();
+    
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    board.forEach((r,y)=>r.forEach((c,x)=>{ if(c) drawBlock(ctx, x, y, c); }));
-    if(current) { drawGhost(); current.shape.forEach((r,y)=>r.forEach((v,x)=>{ if(v && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); })); }
+    for (let y=0; y<ROWS; y++) {
+        for (let x=0; x<COLS; x++) {
+            if (board[y][x]) drawBlock(ctx, x, y, board[y][x]);
+        }
+    }
+    if(current) {
+        drawGhost();
+        for (let y=0; y<current.shape.length; y++) {
+            for (let x=0; x<current.shape[y].length; x++) {
+                if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]);
+            }
+        }
+    }
     requestID = requestAnimationFrame(update);
 }
 
-function showGameOver() { gameOver = true; if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID); playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
+function showGameOver() { gameOver = true; playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
     document.getElementById('game-over-screen').style.display = 'none';
@@ -351,12 +352,12 @@ tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:curre
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 // ==========================================
-// SE（効果音）管理セクション
+// SE（効果音）管理セクション (iPad軽量版)
 // ==========================================
 const SOUND_FILES = {
-    move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
+    move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
+    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
@@ -365,24 +366,29 @@ const SOUND_FILES = {
     gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
 };
 
-const audioCache = {};
+const audioPool = {}; 
 let lastMoveSoundTime = 0;
 
 function playSound(name) {
     if (!SOUND_FILES[name]) return;
     const now = Date.now();
     
-    // 移動音は50ms以内の連続再生を制限（DAS中のノイズ防止）
-    if (name === 'move' && now - lastMoveSoundTime < 50) return;
+    // 移動音リミッター
+    if (name === 'move' && now - lastMoveSoundTime < 60) return;
     if (name === 'move') lastMoveSoundTime = now;
 
-    if (!audioCache[name]) {
-        audioCache[name] = new Audio(SOUND_FILES[name]);
-        audioCache[name].volume = (name === 'move') ? 0.3 : 0.5;
+    // iPad対策: 同じ音源を3つまで用意して使い回す (Pool方式)
+    if (!audioPool[name]) {
+        audioPool[name] = [];
+        for (let i = 0; i < 3; i++) {
+            const a = new Audio(SOUND_FILES[name]);
+            a.volume = (name === 'move') ? 0.2 : 0.5;
+            audioPool[name].push(a);
+        }
     }
-    
-    // 連続で重なってもいいようにクローンを再生
-    const soundClone = audioCache[name].cloneNode();
-    soundClone.volume = audioCache[name].volume;
-    soundClone.play().catch(e => {});
+
+    // 再生中でない音源を探して鳴らす
+    const sound = audioPool[name].find(a => a.paused) || audioPool[name][0];
+    sound.currentTime = 0;
+    sound.play().catch(e => {});
 }
