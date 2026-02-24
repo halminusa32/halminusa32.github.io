@@ -1,104 +1,66 @@
-/* フォントファイルの読み込み設定 */
+/* フォント設定 */
 @font-face {
     font-family: 'Keifont';
     src: url('https://halminusa32.github.io/fonts/keifont.ttf') format('truetype');
 }
-
 @font-face {
     font-family: 'NicoMoji';
-    src: url('https://halminusa32.github.io/fonts/nicomoji-plus_v2-5.ttf') format('truetype'); /* ファイル名は実際の名称に合わせてください */
-}
-
-/* タイトルに適用 */
-#side-info h1 { 
-    font-family: 'NicoMoji', sans-serif; /* ここで読み込んだ名前を指定 */
-    font-size: 24px; 
-    color: #ff3333; 
-    margin: 0;
-    text-shadow: 2px 2px 0px #000;
-}
-
-#side-info p { 
-    font-family: 'NicoMoji', sans-serif; /* 説明文はニコモジにするなど */
-    font-size: 12px; 
-    color: #bbb; 
-    margin-top: 5px;
-    line-height: 1.4;
+    src: url('https://halminusa32.github.io/fonts/nicomoji-plus_v2-5.ttf') format('truetype');
 }
 
 body { 
-    background: #000; color: #fff; font-family: monospace; 
+    background: #000; color: #fff; font-family: 'NicoMoji', monospace; 
     display: flex; flex-direction: column; align-items: center; justify-content: center; 
     min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; 
 }
 
-/* タイトルを左端に固定 */
+/* 左上タイトルとライン数 */
 #side-info {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    text-align: left;
-    pointer-events: none;
+    position: fixed; top: 20px; left: 20px;
+    text-align: left; pointer-events: none; z-index: 10;
 }
-#side-info h1 { font-size: 18px; color: #ff3333; margin: 0; }
-#side-info p { font-size: 10px; color: #888; }
+#side-info h1 { 
+    font-family: 'NicoMoji', sans-serif; 
+    font-size: 18px; color: #ff3333; margin: 0; 
+    text-shadow: 2px 2px 0px #000; line-height: 1.2;
+}
+#side-info p { font-size: 10px; color: #888; margin-top: 5px; }
+
+.line-container {
+    margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;
+}
+#line-count {
+    font-size: 28px; color: #00eeee; font-family: monospace; font-weight: bold;
+}
 
 #room-setup { background: #111; padding: 40px; border-radius: 12px; border: 2px solid #333; text-align: center; }
 #game-container { display: flex; gap: 20px; background: #111; padding: 20px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; }
+
 .player-section { display: flex; flex-direction: column; align-items: center; }
 .side { width: 70px; }
 canvas { background: #1a1a1a; border: 1px solid #333; }
 .label { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
 
-/* ゲームオーバー画面 */
 #game-over-screen {
-    display: none; 
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.85);
-    color: white;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85); color: white; flex-direction: column; justify-content: center; align-items: center; z-index: 1000;
 }
 
-/* --- 横持ち用コントローラー --- */
+/* コントローラー */
 .touch-controls {
-    position: fixed;
-    bottom: 20px;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 40px;
-    box-sizing: border-box;
-    pointer-events: none;
+    position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; pointer-events: none;
 }
-
-.control-left-group, .control-right-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    pointer-events: auto;
-}
-
+.control-left-group, .control-right-group { display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
 .d-pad { display: flex; flex-direction: column; align-items: center; gap: 5px; }
 .move-row { display: flex; gap: 40px; }
 
-/* ボタンの共通スタイル */
 .btn { 
     width: 65px; height: 65px; border-radius: 50%; border: 2px solid #444; 
-    background: rgba(50, 50, 50, 0.8); color: #fff; font-weight: bold; 
-    cursor: pointer; user-select: none;
+    background: rgba(50, 50, 50, 0.8); color: #fff; font-weight: bold; cursor: pointer; user-select: none;
 }
 .btn:active { background: #777; transform: scale(0.9); }
-.blue { background: rgba(0, 123, 255, 0.7); width: 100px; border-radius: 10px; height: 50px; }
+.blue { background: rgba(0, 123, 255, 0.7); width: 120px; border-radius: 10px; height: 50px; font-size: 10px; }
 .purple { background: rgba(111, 66, 193, 0.7); width: 80px; height: 80px; font-size: 24px; }
 .gray { width: 80px; height: 40px; border-radius: 10px; font-size: 14px; background: #333; }
 
-/* PC時は非表示、スマホ(横持ち含む)で表示 */
-@media (max-width: 900px) {
-    .touch-controls { display: flex; }
-    #game-container { scale: 0.8; }
-}
+@media (max-width: 900px) { .touch-controls { display: flex; } #game-container { scale: 0.8; } }
