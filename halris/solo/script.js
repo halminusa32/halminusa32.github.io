@@ -56,21 +56,13 @@ let comboCount = -1, isBackToBack = false;
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
-// 同期頻度の制限用
 let lastSyncedPos = {x: 0, y: 0, r: 0};
 
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
-    if (!forceReset && current && 
-        lastSyncedPos.x === current.pos.x && 
-        lastSyncedPos.y === current.pos.y && 
-        lastSyncedPos.r === rotationState) return;
-
+    if (!forceReset && current && lastSyncedPos.x === current.pos.x && lastSyncedPos.y === current.pos.y && lastSyncedPos.r === rotationState) return;
     if (current) lastSyncedPos = {x: current.pos.x, y: current.pos.y, r: rotationState};
-    
-    const data = forceReset ? 
-        { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : 
-        { board, pos: current.pos, type: current.type, shape: current.shape };
+    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current.pos, type: current.type, shape: current.shape };
     set(ref(db, `games/${roomId}/player`), data);
 }
 
@@ -116,7 +108,6 @@ function rotate(dir = 1) {
     if (gameOver || !current) return;
     const now = Date.now();
     let justEvolved = false;
-
     if (['o', 's', 'z'].includes(current.type)) {
         rotationTimestamps.push(now);
         while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
@@ -132,19 +123,16 @@ function rotate(dir = 1) {
             if (justEvolved) { canvas.style.filter = 'brightness(1.5)'; setTimeout(() => canvas.style.filter = 'none', 150); rotationTimestamps = []; }
         }
     }
-
     const oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
     if (!justEvolved) {
         if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
         else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
         rotationState = (rotationState + dir + 4) % 4;
     }
-
     let success = false, kickSet = [];
     if (current.type === 'i' || current.isEvolvedToI) kickSet = SRS_KICKS_I[`${oldRS}->${rotationState}`] || [[0,0]];
     else if (current.type === 'o' || current.type === 'o_huge' || current.isEvolvedToO) kickSet = [[0,0], [0,1], [-1,0], [1,0], [0,-1], [-1,1], [1,1], [-2,0], [2,0]];
     else kickSet = SRS_KICKS[`${oldRS}->${rotationState}`] || [[0,0]];
-
     for (let k of kickSet) {
         current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1];
         if (!collide(board, current)) { success = true; break; }
@@ -171,14 +159,10 @@ function calculateScore(cleared, isSpin) {
         else if (cleared === 2) base = 1200;
         else if (cleared === 3) base = 1600;
     } else {
-        if (cleared === 1) base = 100;
-        else if (cleared === 2) base = 300;
-        else if (cleared === 3) base = 500;
-        else if (cleared === 4) { base = 800; isDifficult = true; }
+        if (cleared === 1) base = 100; else if (cleared === 2) base = 300; else if (cleared === 3) base = 500; else if (cleared === 4) { base = 800; isDifficult = true; }
     }
     if (cleared > 0) {
-        if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; }
-        else isBackToBack = false;
+        if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; } else isBackToBack = false;
         comboCount++; base += comboCount * 50;
     } else comboCount = -1;
     if (current.type === 'o_huge') base += 1000;
@@ -188,31 +172,22 @@ function calculateScore(cleared, isSpin) {
 function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
-    
     for (let y=0; y<current.shape.length; y++) {
         for (let x=0; x<current.shape[y].length; x++) {
-            if (current.shape[y][x]) {
-                let ny = current.pos.y + y, nx = current.pos.x + x;
-                if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type];
-            }
+            if (current.shape[y][x]) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
         }
     }
-    
     let nextB = board.filter(r => r.some(c => c === null));
     let cleared = ROWS - nextB.length;
-
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
         if (nextB.length === 0) { score += 3500; playSound('perfect'); }
     } else playSound('lock');
-
     const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
-
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
-
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
     lockTimer = null; rotationTimestamps = []; spawn();
@@ -245,9 +220,7 @@ function drawGhost() {
     let g = { ...current.pos };
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
     for (let y=0; y<current.shape.length; y++) {
-        for (let x=0; x<current.shape[y].length; x++) {
-            if (current.shape[y][x] && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2);
-        }
+        for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }
     }
 }
 
@@ -255,9 +228,7 @@ function drawHold() {
     hCtx.clearRect(0,0,hCanvas.width,hCanvas.height); if (!holdPiece) return;
     const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
     for (let y=0; y<SHAPES[holdPiece].length; y++) {
-        for (let x=0; x<SHAPES[holdPiece][y].length; x++) {
-            if (SHAPES[holdPiece][y][x]) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15);
-        }
+        for (let x=0; x<SHAPES[holdPiece][y].length; x++) { if (SHAPES[holdPiece][y][x]) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15); }
     }
 }
 
@@ -267,9 +238,7 @@ function drawNext() {
         let t = nextQueue[i]; if(!t) continue;
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
         for (let y=0; y<SHAPES[t].length; y++) {
-            for (let x=0; x<SHAPES[t][y].length; x++) {
-                if (SHAPES[t][y][x]) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15);
-            }
+            for (let x=0; x<SHAPES[t][y].length; x++) { if (SHAPES[t][y][x]) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15); }
         }
     }
 }
@@ -279,19 +248,12 @@ function update() {
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
     if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
     else if (!grounded) resetLockTimer();
-    
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    for (let y=0; y<ROWS; y++) {
-        for (let x=0; x<COLS; x++) {
-            if (board[y][x]) drawBlock(ctx, x, y, board[y][x]);
-        }
-    }
+    for (let y=0; y<ROWS; y++) { for (let x=0; x<COLS; x++) { if (board[y][x]) drawBlock(ctx, x, y, board[y][x]); } }
     if(current) {
         drawGhost();
         for (let y=0; y<current.shape.length; y++) {
-            for (let x=0; x<current.shape[y].length; x++) {
-                if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]);
-            }
+            for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }
         }
     }
     requestID = requestAnimationFrame(update);
@@ -300,6 +262,7 @@ function update() {
 function showGameOver() { gameOver = true; playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
+    initAudio(); // iPad対策：ユーザー操作時にAudioContextを開始
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
@@ -337,7 +300,7 @@ window.addEventListener('keyup', e => {
 
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
     el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
 };
 bindT('ctrl-left', 'left', () => movePiece(-1));
@@ -346,16 +309,16 @@ bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
 
 const tap = (id, fn) => { 
     const el = document.getElementById(id); 
-    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); if(!gameOver && current) fn(); }, {passive:false}); 
+    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) fn(); }, {passive:false}); 
 };
 tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 // ==========================================
-// SE（効果音）管理セクション (iPad軽量版)
+// SE管理（Web Audio API版：コントロールセンターに出ない）
 // ==========================================
 const SOUND_FILES = {
-    move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
+    move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
@@ -366,29 +329,37 @@ const SOUND_FILES = {
     gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
 };
 
-const audioPool = {}; 
+let audioCtx = null;
+const audioBuffers = {};
 let lastMoveSoundTime = 0;
 
+// AudioContextの初期化（ユーザー操作が必要）
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // 全音源のプリロード
+    Object.keys(SOUND_FILES).forEach(name => {
+        fetch(SOUND_FILES[name])
+            .then(res => res.arrayBuffer())
+            .then(data => audioCtx.decodeAudioData(data))
+            .then(buffer => { audioBuffers[name] = buffer; })
+            .catch(e => console.error("Audio Load Error:", e));
+    });
+}
+
 function playSound(name) {
-    if (!SOUND_FILES[name]) return;
+    if (!audioCtx || !audioBuffers[name]) return;
     const now = Date.now();
-    
-    // 移動音リミッター
     if (name === 'move' && now - lastMoveSoundTime < 60) return;
     if (name === 'move') lastMoveSoundTime = now;
 
-    // iPad対策: 同じ音源を3つまで用意して使い回す (Pool方式)
-    if (!audioPool[name]) {
-        audioPool[name] = [];
-        for (let i = 0; i < 3; i++) {
-            const a = new Audio(SOUND_FILES[name]);
-            a.volume = (name === 'move') ? 0.2 : 0.5;
-            audioPool[name].push(a);
-        }
-    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffers[name];
+    
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = (name === 'move') ? 0.15 : 0.4; // 音量調節
 
-    // 再生中でない音源を探して鳴らす
-    const sound = audioPool[name].find(a => a.paused) || audioPool[name][0];
-    sound.currentTime = 0;
-    sound.play().catch(e => {});
+    source.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    source.start(0);
 }
