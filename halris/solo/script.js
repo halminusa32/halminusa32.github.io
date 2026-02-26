@@ -53,6 +53,9 @@ const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
 
+// レベル管理
+let level = 1;
+
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
@@ -169,6 +172,12 @@ function calculateScore(cleared, isSpin) {
     return Math.floor(base);
 }
 
+function updateDropSpeed() {
+    if (gameInterval) clearInterval(gameInterval);
+    const speed = Math.max(100, 1000 - (level - 1) * 100);
+    gameInterval = setInterval(drop, speed);
+}
+
 function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
@@ -186,6 +195,16 @@ function lockPiece() {
     const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
+
+    // レベル計算
+    let newLevel = Math.floor(totalLines / 10) + 1;
+    if (newLevel > level) {
+        level = newLevel;
+        updateDropSpeed();
+        // ID "level" に合わせて更新
+        if (document.getElementById('level')) document.getElementById('level').innerText = level;
+    }
+
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
@@ -262,18 +281,20 @@ function update() {
 function showGameOver() { gameOver = true; playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
-    initAudio(); // iPad対策：ユーザー操作時にAudioContextを開始
+    initAudio(); 
     document.getElementById('game-over-screen').style.display = 'none';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
     if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; 
-    score = 0; totalLines = 0; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
+    score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
+    // ID "level" に合わせて更新
+    if (document.getElementById('level')) document.getElementById('level').innerText = "1";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
-    if (!gameOver) { update(); gameInterval = setInterval(drop, 1000); }
+    if (!gameOver) { update(); updateDropSpeed(); }
 }
 
 document.addEventListener('DOMContentLoaded', () => { 
@@ -315,10 +336,10 @@ tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:curre
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 // ==========================================
-// SE管理（Web Audio API版：コントロールセンターに出ない）
+// SE管理（Web Audio API）
 // ==========================================
 const SOUND_FILES = {
-    move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
+    move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
@@ -333,11 +354,9 @@ let audioCtx = null;
 const audioBuffers = {};
 let lastMoveSoundTime = 0;
 
-// AudioContextの初期化（ユーザー操作が必要）
 function initAudio() {
     if (audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // 全音源のプリロード
     Object.keys(SOUND_FILES).forEach(name => {
         fetch(SOUND_FILES[name])
             .then(res => res.arrayBuffer())
@@ -352,13 +371,10 @@ function playSound(name) {
     const now = Date.now();
     if (name === 'move' && now - lastMoveSoundTime < 60) return;
     if (name === 'move') lastMoveSoundTime = now;
-
     const source = audioCtx.createBufferSource();
     source.buffer = audioBuffers[name];
-    
     const gainNode = audioCtx.createGain();
-    gainNode.gain.value = (name === 'move') ? 0.15 : 0.4; // 音量調節
-
+    gainNode.gain.value = (name === 'move') ? 0.15 : 0.4;
     source.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     source.start(0);
