@@ -54,7 +54,7 @@ let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
 
 let level = 1;
-const MAX_LEVEL = 15;
+const MAX_LEVEL = 15; 
 
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
@@ -175,8 +175,6 @@ function calculateScore(cleared, isSpin) {
 function updateDropSpeed() {
     if (gameInterval) clearInterval(gameInterval);
     if (level >= MAX_LEVEL) return; 
-
-    // 加速をマイルドに調整 (0.85倍)
     const speed = Math.max(50, 1000 * Math.pow(0.85, level - 1));
     gameInterval = setInterval(drop, speed);
 }
@@ -193,54 +191,31 @@ function lockPiece() {
     let cleared = ROWS - nextB.length;
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
-        if (nextB.length === 0) { score += 3500; playSound('perfect'); }
     } else playSound('lock');
     const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
-
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
-    if (newLevel > level) {
-        level = newLevel;
-        updateDropSpeed();
-        if (document.getElementById('level')) document.getElementById('level').innerText = level;
-    }
-
+    if (newLevel > level) { level = newLevel; updateDropSpeed(); }
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
-    
-    // 次のミノ生成前にタイマーを確実にリセット
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    rotationTimestamps = []; 
-    spawn();
+    rotationTimestamps = []; spawn();
 }
 
 function spawn(type = null) {
-    // 前のミノの設置タイマーが残っている場合は確実にクリアする
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    
-    resetLockTimer(); 
-    lockResetCount = 0; 
-    rotationState = 0;
-    
-    let t = type || nextQueue.shift(); 
-    updateNextQueue();
+    lockResetCount = 0; rotationState = 0;
+    let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
-    
     if (collide(board, nextP)) { showGameOver(); return; }
     current = nextP;
-
-    // 20Gモード (レベル15): 出現時に即座に床まで落とす
     if (level >= MAX_LEVEL) {
-        while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
-            current.pos.y++;
-        }
-        // ここで直接 lockPiece を呼ばないことで、update関数の接地判定から 500ms の猶予が開始される
+        while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
     }
-
     canHold = true; drawNext(); drawHold(); sync();
 }
 
@@ -285,15 +260,18 @@ function drawNext() {
     }
 }
 
+// 空中浮遊修正版 update
 function update() {
     if (gameOver) return;
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    if (grounded && !lockTimer) {
-        lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-    } else if (!grounded) {
-        resetLockTimer();
+    if (grounded) {
+        if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+    } else {
+        if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
+        if (level >= MAX_LEVEL && current) {
+            while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
+        }
     }
-    
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
     for (let y=0; y<ROWS; y++) { for (let x=0; x<COLS; x++) { if (board[y][x]) drawBlock(ctx, x, y, board[y][x]); } }
     if(current) {
@@ -310,7 +288,7 @@ function showGameOver() { gameOver = true; playSound('gameover'); document.getEl
 function resetGame() {
     initAudio(); 
     document.getElementById('game-over-screen').style.display = 'none';
-    document.getElementById('room-setup').style.display = 'none';
+    if(document.getElementById('room-setup')) document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
     if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
@@ -318,13 +296,12 @@ function resetGame() {
     score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
-    if (document.getElementById('level')) document.getElementById('level').innerText = "1";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); updateDropSpeed(); }
 }
 
 document.addEventListener('DOMContentLoaded', () => { 
-    document.getElementById('play').onclick = resetGame; 
+    if(document.getElementById('play')) document.getElementById('play').onclick = resetGame; 
     document.getElementById('restart-button').onclick = resetGame; 
 });
 
@@ -336,11 +313,7 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { 
-        playSound('harddrop'); 
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
-        lockPiece(); 
-    }
+    if (k === ' ') { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -349,6 +322,7 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down');
 });
 
+// モバイル操作用
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
     el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
@@ -357,11 +331,7 @@ const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
 bindT('ctrl-left', 'left', () => movePiece(-1));
 bindT('ctrl-right', 'right', () => movePiece(1));
 bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
-
-const tap = (id, fn) => { 
-    const el = document.getElementById(id); 
-    if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) fn(); }, {passive:false}); 
-};
+const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
@@ -376,33 +346,6 @@ const SOUND_FILES = {
     perfect: 'https://actions.google.com/sounds/v1/cartoon/flute_twirl_up.ogg',
     gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
 };
-
-let audioCtx = null;
-const audioBuffers = {};
-let lastMoveSoundTime = 0;
-
-function initAudio() {
-    if (audioCtx) return;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    Object.keys(SOUND_FILES).forEach(name => {
-        fetch(SOUND_FILES[name])
-            .then(res => res.arrayBuffer())
-            .then(data => audioCtx.decodeAudioData(data))
-            .then(buffer => { audioBuffers[name] = buffer; })
-            .catch(e => console.error("Audio Load Error:", e));
-    });
-}
-
-function playSound(name) {
-    if (!audioCtx || !audioBuffers[name]) return;
-    const now = Date.now();
-    if (name === 'move' && now - lastMoveSoundTime < 60) return;
-    if (name === 'move') lastMoveSoundTime = now;
-    const source = audioCtx.createBufferSource();
-    source.buffer = audioBuffers[name];
-    const gainNode = audioCtx.createGain();
-    gainNode.gain.value = (name === 'move') ? 0.15 : 0.4;
-    source.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    source.start(0);
-}
+let audioCtx = null; const audioBuffers = {}; let lastMoveSoundTime = 0;
+function initAudio() { if (audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); Object.keys(SOUND_FILES).forEach(name => { fetch(SOUND_FILES[name]).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buffer => { audioBuffers[name] = buffer; }); }); }
+function playSound(name) { if (!audioCtx || !audioBuffers[name]) return; const now = Date.now(); if (name === 'move' && now - lastMoveSoundTime < 60) return; if (name === 'move') lastMoveSoundTime = now; const source = audioCtx.createBufferSource(); source.buffer = audioBuffers[name]; const gainNode = audioCtx.createGain(); gainNode.gain.value = (name === 'move') ? 0.15 : 0.4; source.connect(gainNode); gainNode.connect(audioCtx.destination); source.start(0); }
