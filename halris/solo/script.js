@@ -55,6 +55,7 @@ let comboCount = -1, isBackToBack = false;
 
 // レベル管理
 let level = 1;
+const MAX_LEVEL = 15; // ぷよテトマラソンの上限に合わせて15
 
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
@@ -169,12 +170,15 @@ function calculateScore(cleared, isSpin) {
         comboCount++; base += comboCount * 50;
     } else comboCount = -1;
     if (current.type === 'o_huge') base += 1000;
-    return Math.floor(base);
+    return Math.floor(base * level);
 }
 
 function updateDropSpeed() {
     if (gameInterval) clearInterval(gameInterval);
-    const speed = Math.max(100, 1000 - (level - 1) * 100);
+    if (level >= MAX_LEVEL) return; // 15（20G）時はタイマー停止
+
+    // 加速を急激に（0.7倍速ずつ）
+    const speed = Math.max(30, 1000 * Math.pow(0.7, level - 1));
     gameInterval = setInterval(drop, speed);
 }
 
@@ -197,11 +201,10 @@ function lockPiece() {
     totalLines += cleared;
 
     // レベル計算
-    let newLevel = Math.floor(totalLines / 10) + 1;
+    let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
     if (newLevel > level) {
         level = newLevel;
         updateDropSpeed();
-        // ID "level" に合わせて更新
         if (document.getElementById('level')) document.getElementById('level').innerText = level;
     }
 
@@ -217,8 +220,18 @@ function spawn(type = null) {
     let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
+    
     if (collide(board, nextP)) { showGameOver(); return; }
-    current = nextP; canHold = true; drawNext(); drawHold(); sync();
+    current = nextP;
+
+    // レベル15 (20Gモード): 出現時に即座に床まで落とす
+    if (level >= MAX_LEVEL) {
+        while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
+            current.pos.y++;
+        }
+    }
+
+    canHold = true; drawNext(); drawHold(); sync();
 }
 
 function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) current.pos.y--; else { resetLockTimer(); sync(); } }
@@ -291,7 +304,6 @@ function resetGame() {
     score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
-    // ID "level" に合わせて更新
     if (document.getElementById('level')) document.getElementById('level').innerText = "1";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); updateDropSpeed(); }
