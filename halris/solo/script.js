@@ -53,9 +53,8 @@ const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
 
-// レベル管理
 let level = 1;
-const MAX_LEVEL = 15; // ぷよテトマラソンの上限に合わせて15
+const MAX_LEVEL = 15;
 
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
@@ -175,10 +174,10 @@ function calculateScore(cleared, isSpin) {
 
 function updateDropSpeed() {
     if (gameInterval) clearInterval(gameInterval);
-    if (level >= MAX_LEVEL) return; // 15（20G）時はタイマー停止
+    if (level >= MAX_LEVEL) return; 
 
-    // 加速を急激に（0.7倍速ずつ）
-    const speed = Math.max(30, 1000 * Math.pow(0.7, level - 1));
+    // 加速をマイルドに調整 (0.85倍)
+    const speed = Math.max(50, 1000 * Math.pow(0.85, level - 1));
     gameInterval = setInterval(drop, speed);
 }
 
@@ -200,7 +199,6 @@ function lockPiece() {
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
 
-    // レベル計算
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
     if (newLevel > level) {
         level = newLevel;
@@ -212,23 +210,35 @@ function lockPiece() {
     document.getElementById('score-display').innerText = score;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB; 
-    lockTimer = null; rotationTimestamps = []; spawn();
+    
+    // 次のミノ生成前にタイマーを確実にリセット
+    if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
+    rotationTimestamps = []; 
+    spawn();
 }
 
 function spawn(type = null) {
-    resetLockTimer(); lockResetCount = 0; rotationState = 0;
-    let t = type || nextQueue.shift(); updateNextQueue();
+    // 前のミノの設置タイマーが残っている場合は確実にクリアする
+    if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
+    
+    resetLockTimer(); 
+    lockResetCount = 0; 
+    rotationState = 0;
+    
+    let t = type || nextQueue.shift(); 
+    updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
     
     if (collide(board, nextP)) { showGameOver(); return; }
     current = nextP;
 
-    // レベル15 (20Gモード): 出現時に即座に床まで落とす
+    // 20Gモード (レベル15): 出現時に即座に床まで落とす
     if (level >= MAX_LEVEL) {
         while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
             current.pos.y++;
         }
+        // ここで直接 lockPiece を呼ばないことで、update関数の接地判定から 500ms の猶予が開始される
     }
 
     canHold = true; drawNext(); drawHold(); sync();
@@ -278,8 +288,12 @@ function drawNext() {
 function update() {
     if (gameOver) return;
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-    else if (!grounded) resetLockTimer();
+    if (grounded && !lockTimer) {
+        lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+    } else if (!grounded) {
+        resetLockTimer();
+    }
+    
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
     for (let y=0; y<ROWS; y++) { for (let x=0; x<COLS; x++) { if (board[y][x]) drawBlock(ctx, x, y, board[y][x]); } }
     if(current) {
@@ -322,7 +336,11 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === ' ') { 
+        playSound('harddrop'); 
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+        lockPiece(); 
+    }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -347,9 +365,6 @@ const tap = (id, fn) => {
 tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
-// ==========================================
-// SE管理（Web Audio API）
-// ==========================================
 const SOUND_FILES = {
     move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
