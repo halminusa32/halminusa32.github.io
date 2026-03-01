@@ -195,8 +195,16 @@ function lockPiece() {
     const isSpin = (rotationTimestamps.length > 0);
     score += calculateScore(cleared, isSpin);
     totalLines += cleared;
+
+    // レベル計算と表記更新
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
-    if (newLevel > level) { level = newLevel; updateDropSpeed(); }
+    if (newLevel > level) {
+        level = newLevel;
+        updateDropSpeed();
+        const levelEl = document.getElementById('level');
+        if (levelEl) levelEl.innerText = level;
+    }
+
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
@@ -260,7 +268,6 @@ function drawNext() {
     }
 }
 
-// 空中浮遊修正版 update
 function update() {
     if (gameOver) return;
     const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
@@ -296,6 +303,9 @@ function resetGame() {
     score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
+    // ゲームリセット時にレベル表示を1に戻す
+    const levelEl = document.getElementById('level');
+    if (levelEl) levelEl.innerText = "1";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); updateDropSpeed(); }
 }
@@ -322,7 +332,6 @@ window.addEventListener('keyup', e => {
     if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down');
 });
 
-// モバイル操作用
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
     el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
