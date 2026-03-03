@@ -53,6 +53,11 @@ const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
 
+// アニメーション用変数
+let clearingLines = []; 
+let clearAnimTimer = 0;
+const CLEAR_ANIM_DURATION = 12; // 約0.2秒（60fps換算）
+
 let level = 1;
 const MAX_LEVEL = 15; 
 
@@ -91,7 +96,7 @@ function collide(b, p) {
 }
 
 function movePiece(dir) {
-    if (gameOver || !current) return;
+    if (gameOver || !current || clearAnimTimer > 0) return;
     current.pos.x += dir;
     if (collide(board, current)) { current.pos.x -= dir; return false; }
     playSound('move');
@@ -108,7 +113,7 @@ function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
 function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
 function rotate(dir = 1) {
-    if (gameOver || !current) return;
+    if (gameOver || !current || clearAnimTimer > 0) return;
     const now = Date.now();
     let justEvolved = false;
     if (['o', 's', 'z'].includes(current.type)) {
@@ -187,16 +192,33 @@ function lockPiece() {
             if (current.shape[y][x]) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
         }
     }
-    let nextB = board.filter(r => r.some(c => c === null));
-    let cleared = ROWS - nextB.length;
+
+    // ライン消去判定
+    clearingLines = [];
+    for (let y = 0; y < ROWS; y++) {
+        if (board[y].every(cell => cell !== null)) clearingLines.push(y);
+    }
+
+    const isSpin = (rotationTimestamps.length > 0);
+    const cleared = clearingLines.length;
+
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
-    } else playSound('lock');
-    const isSpin = (rotationTimestamps.length > 0);
-    score += calculateScore(cleared, isSpin);
-    totalLines += cleared;
+        clearAnimTimer = CLEAR_ANIM_DURATION; // アニメーション開始
+        score += calculateScore(cleared, isSpin);
+        totalLines += cleared;
+    } else {
+        playSound('lock');
+        finishLocking();
+    }
+}
 
-    // レベル計算と表記更新
+// アニメーション終了後の実際の消去処理
+function finishLocking() {
+    let nextB = board.filter((_, i) => !clearingLines.includes(i));
+    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    board = nextB;
+
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
     if (newLevel > level) {
         level = newLevel;
@@ -207,10 +229,11 @@ function lockPiece() {
 
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
-    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB; 
+    
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    rotationTimestamps = []; spawn();
+    rotationTimestamps = []; 
+    clearingLines = [];
+    spawn();
 }
 
 function spawn(type = null) {
@@ -227,10 +250,15 @@ function spawn(type = null) {
     canHold = true; drawNext(); drawHold(); sync();
 }
 
-function drop() { if(gameOver || !current) return; current.pos.y++; if (collide(board, current)) current.pos.y--; else { resetLockTimer(); sync(); } }
+function drop() { 
+    if(gameOver || !current || clearAnimTimer > 0) return; 
+    current.pos.y++; 
+    if (collide(board, current)) current.pos.y--; 
+    else { resetLockTimer(); sync(); } 
+}
 
 function hold() {
-    if (!canHold || gameOver) return;
+    if (!canHold || gameOver || clearAnimTimer > 0) return;
     playSound('hold');
     let t = (holdPiece === 'i_evolved' || holdPiece === 'o_huge') ? 'i' : holdPiece;
     holdPiece = (current.type === 'i_evolved' || current.type === 'o_huge') ? 'i' : current.type;
@@ -241,7 +269,7 @@ function hold() {
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
 
 function drawGhost() {
-    if (!current) return;
+    if (!current || clearAnimTimer > 0) return;
     let g = { ...current.pos };
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
     for (let y=0; y<current.shape.length; y++) {
@@ -270,18 +298,40 @@ function drawNext() {
 
 function update() {
     if (gameOver) return;
-    const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-    if (grounded) {
-        if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+
+    // ライン消去アニメーションの進行
+    if (clearAnimTimer > 0) {
+        clearAnimTimer--;
+        if (clearAnimTimer === 0) finishLocking();
     } else {
-        if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-        if (level >= MAX_LEVEL && current) {
-            while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
+        const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
+        if (grounded) {
+            if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+        } else {
+            if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
+            if (level >= MAX_LEVEL && current) {
+                while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
+            }
         }
     }
+
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    for (let y=0; y<ROWS; y++) { for (let x=0; x<COLS; x++) { if (board[y][x]) drawBlock(ctx, x, y, board[y][x]); } }
-    if(current) {
+    
+    // ボードの描画
+    for (let y=0; y<ROWS; y++) { 
+        for (let x=0; x<COLS; x++) { 
+            if (board[y][x]) {
+                // 消去中のラインなら白く光らせる
+                if (clearingLines.includes(y)) {
+                    drawBlock(ctx, x, y, '#ffffff');
+                } else {
+                    drawBlock(ctx, x, y, board[y][x]);
+                }
+            } 
+        } 
+    }
+
+    if(current && clearAnimTimer === 0) {
         drawGhost();
         for (let y=0; y<current.shape.length; y++) {
             for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }
@@ -301,9 +351,9 @@ function resetGame() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; 
     score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; rotationTimestamps = [];
+    clearAnimTimer = 0; clearingLines = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
-    // ゲームリセット時にレベル表示を1に戻す
     const levelEl = document.getElementById('level');
     if (levelEl) levelEl.innerText = "1";
     sync(true); refillBag(); updateNextQueue(); spawn(); 
@@ -316,14 +366,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('keydown', e => {
-    if(gameOver || !current) return;
+    if(gameOver || !current || clearAnimTimer > 0) return;
     const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    if (k === ' ') { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); }
+    if (k === ' ') { 
+        playSound('harddrop'); 
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+        lockPiece(); 
+    }
     if (k === 'c' || k === 'shift') hold();
 });
 
@@ -334,20 +388,20 @@ window.addEventListener('keyup', e => {
 
 const bindT = (id, k, act, interval = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) startAutoMove(k, act, interval, das); }, {passive:false});
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) startAutoMove(k, act, interval, das); }, {passive:false});
     el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
 };
 bindT('ctrl-left', 'left', () => movePiece(-1));
 bindT('ctrl-right', 'right', () => movePiece(1));
 bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
-const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current) fn(); }, {passive:false}); };
+const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 const SOUND_FILES = {
-    move: 'https://actions.google.com/sounds/v1/foley/drawbridge_opening.ogg', 
+    move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
