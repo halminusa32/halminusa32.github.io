@@ -56,7 +56,7 @@ let comboCount = -1, isBackToBack = false;
 // アニメーション用変数
 let clearingLines = []; 
 let clearAnimTimer = 0;
-const CLEAR_ANIM_DURATION = 12; // 約0.2秒（60fps換算）
+const CLEAR_ANIM_DURATION = 25; // （60fps換算）
 
 let level = 1;
 const MAX_LEVEL = 15; 
