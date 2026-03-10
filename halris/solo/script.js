@@ -211,10 +211,21 @@ function lockPiece() {
     }
 }
 
+// 【修正】全消し判定の追加
 function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
+
+    // 全消しチェック: すべてのセルがnullならボーナス
+    const isAllClear = board.every(row => row.every(cell => cell === null));
+    if (isAllClear) {
+        score += 3000;
+        playSound('perfect'); // 全消し用の音（既存のperfectを使用）
+        canvas.style.filter = 'contrast(2) brightness(2)';
+        setTimeout(() => canvas.style.filter = 'none', 500);
+        console.log("ALL CLEAR!");
+    }
 
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
     if (newLevel > level) {
@@ -247,14 +258,12 @@ function spawn(type = null) {
     canHold = true; drawNext(); drawHold(); sync();
 }
 
-// 【修正】ソフトドロップ時のスコア加算
 function drop() { 
     if(gameOver || !current || clearAnimTimer > 0) return; 
     current.pos.y++; 
     if (collide(board, current)) {
         current.pos.y--; 
     } else {
-        // ソフトドロップ中（下キーが押されている間）なら1マス1点
         if (keyStates['arrowdown']) {
             score += 1;
             document.getElementById('score-display').innerText = score;
@@ -377,7 +386,6 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
     
-    // 【修正】ハードドロップ時のスコア加算（1マス2点）
     if (k === ' ') { 
         playSound('harddrop'); 
         let dropDistance = 0;
@@ -419,12 +427,12 @@ tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ct
 const SOUND_FILES = {
     move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
     tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
     lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
     hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
-    perfect: 'https://actions.google.com/sounds/v1/cartoon/flute_twirl_up.ogg',
+    perfect: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
     gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
 };
 let audioCtx = null; const audioBuffers = {}; let lastMoveSoundTime = 0;
