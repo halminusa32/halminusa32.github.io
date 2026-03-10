@@ -53,10 +53,9 @@ const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
 
-// アニメーション用変数
 let clearingLines = []; 
 let clearAnimTimer = 0;
-const CLEAR_ANIM_DURATION = 20; // （60fps換算）
+const CLEAR_ANIM_DURATION = 12; 
 
 let level = 1;
 const MAX_LEVEL = 15; 
@@ -193,7 +192,6 @@ function lockPiece() {
         }
     }
 
-    // ライン消去判定
     clearingLines = [];
     for (let y = 0; y < ROWS; y++) {
         if (board[y].every(cell => cell !== null)) clearingLines.push(y);
@@ -204,7 +202,7 @@ function lockPiece() {
 
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
-        clearAnimTimer = CLEAR_ANIM_DURATION; // アニメーション開始
+        clearAnimTimer = CLEAR_ANIM_DURATION; 
         score += calculateScore(cleared, isSpin);
         totalLines += cleared;
     } else {
@@ -213,7 +211,6 @@ function lockPiece() {
     }
 }
 
-// アニメーション終了後の実際の消去処理
 function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
@@ -250,11 +247,20 @@ function spawn(type = null) {
     canHold = true; drawNext(); drawHold(); sync();
 }
 
+// 【修正】ソフトドロップ時のスコア加算
 function drop() { 
     if(gameOver || !current || clearAnimTimer > 0) return; 
     current.pos.y++; 
-    if (collide(board, current)) current.pos.y--; 
-    else { resetLockTimer(); sync(); } 
+    if (collide(board, current)) {
+        current.pos.y--; 
+    } else {
+        // ソフトドロップ中（下キーが押されている間）なら1マス1点
+        if (keyStates['arrowdown']) {
+            score += 1;
+            document.getElementById('score-display').innerText = score;
+        }
+        resetLockTimer(); sync(); 
+    } 
 }
 
 function hold() {
@@ -299,7 +305,6 @@ function drawNext() {
 function update() {
     if (gameOver) return;
 
-    // ライン消去アニメーションの進行
     if (clearAnimTimer > 0) {
         clearAnimTimer--;
         if (clearAnimTimer === 0) finishLocking();
@@ -317,11 +322,9 @@ function update() {
 
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
     
-    // ボードの描画
     for (let y=0; y<ROWS; y++) { 
         for (let x=0; x<COLS; x++) { 
             if (board[y][x]) {
-                // 消去中のラインなら白く光らせる
                 if (clearingLines.includes(y)) {
                     drawBlock(ctx, x, y, '#ffffff');
                 } else {
@@ -373,9 +376,17 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
+    
+    // 【修正】ハードドロップ時のスコア加算（1マス2点）
     if (k === ' ') { 
         playSound('harddrop'); 
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+        let dropDistance = 0;
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) {
+            current.pos.y++; 
+            dropDistance++;
+        }
+        score += dropDistance * 2;
+        document.getElementById('score-display').innerText = score;
         lockPiece(); 
     }
     if (k === 'c' || k === 'shift') hold();
@@ -395,14 +406,21 @@ bindT('ctrl-left', 'left', () => movePiece(-1));
 bindT('ctrl-right', 'right', () => movePiece(1));
 bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
 const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) fn(); }, {passive:false}); };
-tap('ctrl-up', () => { playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; lockPiece(); });
+tap('ctrl-up', () => { 
+    playSound('harddrop'); 
+    let dropDistance = 0;
+    while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; dropDistance++; }
+    score += dropDistance * 2;
+    document.getElementById('score-display').innerText = score;
+    lockPiece(); 
+});
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
 const SOUND_FILES = {
     move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
     rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
-    tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
+    tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
     lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
     harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
     hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
