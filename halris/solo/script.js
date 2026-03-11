@@ -15,6 +15,43 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const roomId = "solo-room-data";
 
+// HTML要素に動的にスタイルとコンボ表示を追加
+const style = document.createElement('style');
+style.innerHTML = `
+    #combo-container {
+        position: absolute;
+        right: -80px;
+        top: 40%;
+        text-align: center;
+        font-family: 'NicoMoji', sans-serif;
+        color: #ffeb3b;
+        text-shadow: 2px 2px #000, 0 0 10px #f57c00;
+        pointer-events: none;
+        opacity: 0;
+        transform: scale(0.5);
+        transition: opacity 0.2s, transform 0.2s;
+        z-index: 100;
+    }
+    #combo-container.active {
+        opacity: 1;
+        transform: scale(1.2) rotate(-5deg);
+        animation: combo-bump 0.2s ease-out;
+    }
+    @keyframes combo-bump {
+        0% { transform: scale(0.8); }
+        50% { transform: scale(1.5); }
+        100% { transform: scale(1.2) rotate(-5deg); }
+    }
+`;
+document.head.appendChild(style);
+
+// ゲームコンテナ内にコンボ表示用要素を注入
+const gameContainer = document.getElementById('game-container');
+const comboDiv = document.createElement('div');
+comboDiv.id = 'combo-container';
+comboDiv.innerHTML = '<div id="combo-count" style="font-size: 40px;">0</div><div style="font-size: 16px;">REN</div>';
+gameContainer.appendChild(comboDiv);
+
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
@@ -157,6 +194,7 @@ function handleMoveReset() {
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
 
+// 【修正】REN（コンボ）スコア計算の強化
 function calculateScore(cleared, isSpin) {
     let base = 0, isDifficult = false;
     if (isSpin) {
@@ -170,8 +208,15 @@ function calculateScore(cleared, isSpin) {
     }
     if (cleared > 0) {
         if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; } else isBackToBack = false;
-        comboCount++; base += comboCount * 50;
-    } else comboCount = -1;
+        
+        comboCount++; 
+        // RENボーナス: コンボが続くほど加算が増える (ぷよテト風)
+        if (comboCount > 0) {
+            base += Math.min(comboCount, 10) * 50; 
+        }
+    } else {
+        comboCount = -1;
+    }
     if (current.type === 'o_huge') base += 1000;
     return Math.floor(base * level);
 }
@@ -206,22 +251,36 @@ function lockPiece() {
         score += calculateScore(cleared, isSpin);
         totalLines += cleared;
     } else {
+        // ライン消去しなかったらコンボリセット
+        comboCount = -1;
         playSound('lock');
         finishLocking();
     }
 }
 
-// 【修正】全消し判定の追加
+// 【修正】全消し判定 ＋ REN表示の追加
 function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
 
-    // 全消しチェック: すべてのセルがnullならボーナス
+    // --- REN表示の制御 ---
+    const comboContainer = document.getElementById('combo-container');
+    const comboCountText = document.getElementById('combo-count');
+    if (comboCount > 0) {
+        comboCountText.innerText = comboCount;
+        comboContainer.classList.remove('active');
+        void comboContainer.offsetWidth; // アニメーション再発火用
+        comboContainer.classList.add('active');
+    } else {
+        comboContainer.classList.remove('active');
+    }
+
+    // 全消しチェック
     const isAllClear = board.every(row => row.every(cell => cell === null));
     if (isAllClear) {
         score += 3000;
-        playSound('perfect'); // 全消し用の音（既存のperfectを使用）
+        playSound('perfect');
         canvas.style.filter = 'contrast(2) brightness(2)';
         setTimeout(() => canvas.style.filter = 'none', 500);
         console.log("ALL CLEAR!");
@@ -368,6 +427,7 @@ function resetGame() {
     document.getElementById('score-display').innerText = "0";
     const levelEl = document.getElementById('level');
     if (levelEl) levelEl.innerText = "1";
+    document.getElementById('combo-container').classList.remove('active');
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); updateDropSpeed(); }
 }
