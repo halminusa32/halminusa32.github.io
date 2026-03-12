@@ -15,43 +15,6 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const roomId = "solo-room-data";
 
-// HTML要素に動的にスタイルとコンボ表示を追加
-const style = document.createElement('style');
-style.innerHTML = `
-    #combo-container {
-        position: absolute;
-        right: -80px;
-        top: 40%;
-        text-align: center;
-        font-family: 'NicoMoji', sans-serif;
-        color: #ffeb3b;
-        text-shadow: 2px 2px #000, 0 0 10px #f57c00;
-        pointer-events: none;
-        opacity: 0;
-        transform: scale(0.5);
-        transition: opacity 0.2s, transform 0.2s;
-        z-index: 100;
-    }
-    #combo-container.active {
-        opacity: 1;
-        transform: scale(1.2) rotate(-5deg);
-        animation: combo-bump 0.2s ease-out;
-    }
-    @keyframes combo-bump {
-        0% { transform: scale(0.8); }
-        50% { transform: scale(1.5); }
-        100% { transform: scale(1.2) rotate(-5deg); }
-    }
-`;
-document.head.appendChild(style);
-
-// ゲームコンテナ内にコンボ表示用要素を注入
-const gameContainer = document.getElementById('game-container');
-const comboDiv = document.createElement('div');
-comboDiv.id = 'combo-container';
-comboDiv.innerHTML = '<div id="combo-count" style="font-size: 40px;">0</div><div style="font-size: 16px;">REN</div>';
-gameContainer.appendChild(comboDiv);
-
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
@@ -194,7 +157,6 @@ function handleMoveReset() {
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
 
-// 【修正】REN（コンボ）スコア計算の強化
 function calculateScore(cleared, isSpin) {
     let base = 0, isDifficult = false;
     if (isSpin) {
@@ -208,12 +170,8 @@ function calculateScore(cleared, isSpin) {
     }
     if (cleared > 0) {
         if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; } else isBackToBack = false;
-        
         comboCount++; 
-        // RENボーナス: コンボが続くほど加算が増える (ぷよテト風)
-        if (comboCount > 0) {
-            base += Math.min(comboCount, 10) * 50; 
-        }
+        if (comboCount > 0) base += Math.min(comboCount, 10) * 50; 
     } else {
         comboCount = -1;
     }
@@ -236,54 +194,52 @@ function lockPiece() {
             if (current.shape[y][x]) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
         }
     }
-
     clearingLines = [];
-    for (let y = 0; y < ROWS; y++) {
-        if (board[y].every(cell => cell !== null)) clearingLines.push(y);
-    }
-
+    for (let y = 0; y < ROWS; y++) { if (board[y].every(cell => cell !== null)) clearingLines.push(y); }
     const isSpin = (rotationTimestamps.length > 0);
     const cleared = clearingLines.length;
-
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
         clearAnimTimer = CLEAR_ANIM_DURATION; 
         score += calculateScore(cleared, isSpin);
         totalLines += cleared;
     } else {
-        // ライン消去しなかったらコンボリセット
         comboCount = -1;
         playSound('lock');
         finishLocking();
     }
 }
 
-// 【修正】全消し判定 ＋ REN表示の追加
 function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
 
-    // --- REN表示の制御 ---
-    const comboContainer = document.getElementById('combo-container');
-    const comboCountText = document.getElementById('combo-count');
+    // REN表示制御
+    const comboEl = document.getElementById('combo-container');
+    const comboCountEl = document.getElementById('combo-count');
     if (comboCount > 0) {
-        comboCountText.innerText = comboCount;
-        comboContainer.classList.remove('active');
-        void comboContainer.offsetWidth; // アニメーション再発火用
-        comboContainer.classList.add('active');
+        comboCountEl.innerText = comboCount;
+        comboEl.classList.remove('active');
+        void comboEl.offsetWidth; 
+        comboEl.classList.add('active');
     } else {
-        comboContainer.classList.remove('active');
+        comboEl.classList.remove('active');
     }
 
-    // 全消しチェック
+    // 全消しチェック & PERFECT CLEAR表示
     const isAllClear = board.every(row => row.every(cell => cell === null));
     if (isAllClear) {
         score += 3000;
         playSound('perfect');
+        const pcText = document.getElementById('perfect-clear-text');
+        if (pcText) {
+            pcText.classList.remove('pc-animate');
+            void pcText.offsetWidth;
+            pcText.classList.add('pc-animate');
+        }
         canvas.style.filter = 'contrast(2) brightness(2)';
         setTimeout(() => canvas.style.filter = 'none', 500);
-        console.log("ALL CLEAR!");
     }
 
     let newLevel = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
@@ -298,8 +254,7 @@ function finishLocking() {
     document.getElementById('score-display').innerText = score;
     
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    rotationTimestamps = []; 
-    clearingLines = [];
+    rotationTimestamps = []; clearingLines = [];
     spawn();
 }
 
@@ -311,24 +266,15 @@ function spawn(type = null) {
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
     if (collide(board, nextP)) { showGameOver(); return; }
     current = nextP;
-    if (level >= MAX_LEVEL) {
-        while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
-    }
+    if (level >= MAX_LEVEL) { while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; } }
     canHold = true; drawNext(); drawHold(); sync();
 }
 
 function drop() { 
     if(gameOver || !current || clearAnimTimer > 0) return; 
     current.pos.y++; 
-    if (collide(board, current)) {
-        current.pos.y--; 
-    } else {
-        if (keyStates['arrowdown']) {
-            score += 1;
-            document.getElementById('score-display').innerText = score;
-        }
-        resetLockTimer(); sync(); 
-    } 
+    if (collide(board, current)) { current.pos.y--; } 
+    else { if (keyStates['arrowdown']) { score += 1; document.getElementById('score-display').innerText = score; } resetLockTimer(); sync(); } 
 }
 
 function hold() {
@@ -372,41 +318,17 @@ function drawNext() {
 
 function update() {
     if (gameOver) return;
-
-    if (clearAnimTimer > 0) {
-        clearAnimTimer--;
-        if (clearAnimTimer === 0) finishLocking();
-    } else {
+    if (clearAnimTimer > 0) { clearAnimTimer--; if (clearAnimTimer === 0) finishLocking(); } 
+    else {
         const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-        if (grounded) {
-            if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-        } else {
-            if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-            if (level >= MAX_LEVEL && current) {
-                while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; }
-            }
-        }
+        if (grounded) { if (!lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY); } 
+        else { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } if (level >= MAX_LEVEL && current) { while (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { current.pos.y++; } } }
     }
-
     ctx.fillStyle = '#2e2e2e'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    
-    for (let y=0; y<ROWS; y++) { 
-        for (let x=0; x<COLS; x++) { 
-            if (board[y][x]) {
-                if (clearingLines.includes(y)) {
-                    drawBlock(ctx, x, y, '#ffffff');
-                } else {
-                    drawBlock(ctx, x, y, board[y][x]);
-                }
-            } 
-        } 
-    }
-
+    for (let y=0; y<ROWS; y++) { for (let x=0; x<COLS; x++) { if (board[y][x]) { drawBlock(ctx, x, y, clearingLines.includes(y) ? '#ffffff' : board[y][x]); } } }
     if(current && clearAnimTimer === 0) {
         drawGhost();
-        for (let y=0; y<current.shape.length; y++) {
-            for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); }
-        }
+        for (let y=0; y<current.shape.length; y++) { for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); } }
     }
     requestID = requestAnimationFrame(update);
 }
@@ -425,8 +347,7 @@ function resetGame() {
     clearAnimTimer = 0; clearingLines = [];
     document.getElementById('line-count').innerText = "0";
     document.getElementById('score-display').innerText = "0";
-    const levelEl = document.getElementById('level');
-    if (levelEl) levelEl.innerText = "1";
+    if (document.getElementById('level')) document.getElementById('level').innerText = "1";
     document.getElementById('combo-container').classList.remove('active');
     sync(true); refillBag(); updateNextQueue(); spawn(); 
     if (!gameOver) { update(); updateDropSpeed(); }
@@ -445,16 +366,10 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
-    
     if (k === ' ') { 
-        playSound('harddrop'); 
-        let dropDistance = 0;
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) {
-            current.pos.y++; 
-            dropDistance++;
-        }
-        score += dropDistance * 2;
-        document.getElementById('score-display').innerText = score;
+        playSound('harddrop'); let d = 0;
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; d++; }
+        score += d * 2; document.getElementById('score-display').innerText = score;
         lockPiece(); 
     }
     if (k === 'c' || k === 'shift') hold();
@@ -475,11 +390,9 @@ bindT('ctrl-right', 'right', () => movePiece(1));
 bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
 const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { 
-    playSound('harddrop'); 
-    let dropDistance = 0;
-    while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; dropDistance++; }
-    score += dropDistance * 2;
-    document.getElementById('score-display').innerText = score;
+    playSound('harddrop'); let d = 0;
+    while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; d++; }
+    score += d * 2; document.getElementById('score-display').innerText = score;
     lockPiece(); 
 });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
