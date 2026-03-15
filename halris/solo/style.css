@@ -13,14 +13,8 @@ body {
     min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; 
 }
 
-#side-info {
-    position: fixed; top: 20px; left: 20px;
-    text-align: left; pointer-events: none; z-index: 10;
-}
-#side-info h1 { 
-    font-size: 18px; color: #ff3333; margin: 0; 
-    text-shadow: 2px 2px 0px #000; line-height: 1.2;
-}
+#side-info { position: fixed; top: 20px; left: 20px; text-align: left; pointer-events: none; z-index: 10; }
+#side-info h1 { font-size: 18px; color: #ff3333; margin: 0; text-shadow: 2px 2px 0px #000; line-height: 1.2; }
 #side-info p { font-size: 10px; color: #888; margin-top: 5px; }
 
 .line-container { margin-top: 15px; border-top: 1px solid #333; padding-top: 10px; }
@@ -30,8 +24,8 @@ body {
 #room-setup { background: #111; padding: 40px; border-radius: 12px; border: 2px solid #333; text-align: center; }
 
 #game-container { 
-    position: relative;
-    display: flex; gap: 20px; background: #111; padding: 20px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; 
+    position: relative; display: flex; gap: 20px; background: #111; padding: 20px; 
+    border-radius: 10px; border: 2px solid #444; align-items: flex-start; 
 }
 
 /* REN表示 */
