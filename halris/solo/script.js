@@ -21,7 +21,7 @@ const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContex
 
 const ROWS = 20, COLS = 10, SIZE = 24;
 const O_SPIN_THRESHOLD = 10; 
-const CLEAR_ANIM_DURATION = 18; // 少し長めにして光の波を見せる
+const CLEAR_ANIM_DURATION = 18; 
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00',
@@ -207,6 +207,9 @@ function finishLocking() {
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
 
+    // ホールド権利の復活（ここが重要）
+    canHold = true;
+
     const comboEl = document.getElementById('combo-container');
     const comboCountEl = document.getElementById('combo-count');
     if (comboCount > 0) {
@@ -251,10 +254,21 @@ function drop() {
 function hold() {
     if (!canHold || gameOver || clearAnimTimer > 0) return;
     playSound('hold');
-    let t = (holdPiece === 'i_evolved' || holdPiece === 'o_huge') ? 'i' : holdPiece;
-    holdPiece = (current.type === 'i_evolved' || current.type === 'o_huge') ? 'i' : current.type;
-    if (t) spawn(t); else spawn();
-    canHold = false; drawHold();
+    
+    // ホールドしたミノを一旦退避
+    let tempType = (current.type === 'i_evolved' || current.type === 'o_huge' || current.isEvolvedToO || current.isEvolvedToI) ? current.type[0] : current.type;
+    
+    if (holdPiece) {
+        let t = holdPiece;
+        holdPiece = tempType;
+        spawn(t);
+    } else {
+        holdPiece = tempType;
+        spawn();
+    }
+    
+    canHold = false; // 次のロックまでホールド不可
+    drawHold();
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
@@ -296,14 +310,12 @@ function update() {
     }
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
     
-    // ボード描画
     for (let y=0; y<ROWS; y++) { 
         for (let x=0; x<COLS; x++) { 
             if (board[y][x]) { 
                 let color = board[y][x];
                 let opacity = 1;
                 if (clearingLines.includes(y)) {
-                    // 左から右へのウェーブ演出
                     const progress = (CLEAR_ANIM_DURATION - clearAnimTimer) / CLEAR_ANIM_DURATION;
                     const wavePos = progress * COLS;
                     if (x < wavePos - 1) { color = "#ffffff"; opacity = 0.3; } 
@@ -349,9 +361,8 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
     if (k === ' ') { 
-        playSound('harddrop'); let d = 0;
-        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; d++; }
-        score += d * 2; lockPiece(); 
+        playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; }
+        lockPiece(); 
     }
     if (k === 'c' || k === 'shift') hold();
 });
