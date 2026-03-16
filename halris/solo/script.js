@@ -207,7 +207,6 @@ function finishLocking() {
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
 
-    // ホールド権利の復活（ここが重要）
     canHold = true;
 
     const comboEl = document.getElementById('combo-container');
@@ -232,7 +231,14 @@ function finishLocking() {
     document.getElementById('level').innerText = level;
     
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    rotationTimestamps = []; clearingLines = []; spawn();
+    rotationTimestamps = []; clearingLines = []; 
+    
+    spawn();
+
+    // 次のミノが出た瞬間に、押しっぱなしのキーを反映（DAS/ARRの再開）
+    if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
+    if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
+    if (keyStates['arrowdown']) { stopAutoMove('down'); startAutoMove('down', drop, SOFT_DROP_SPEED, false); }
 }
 
 function spawn(type = null) {
@@ -254,21 +260,14 @@ function drop() {
 function hold() {
     if (!canHold || gameOver || clearAnimTimer > 0) return;
     playSound('hold');
-    
-    // ホールドしたミノを一旦退避
     let tempType = (current.type === 'i_evolved' || current.type === 'o_huge' || current.isEvolvedToO || current.isEvolvedToI) ? current.type[0] : current.type;
+    if (holdPiece) { let t = holdPiece; holdPiece = tempType; spawn(t); } 
+    else { holdPiece = tempType; spawn(); }
+    canHold = false; drawHold();
     
-    if (holdPiece) {
-        let t = holdPiece;
-        holdPiece = tempType;
-        spawn(t);
-    } else {
-        holdPiece = tempType;
-        spawn();
-    }
-    
-    canHold = false; // 次のロックまでホールド不可
-    drawHold();
+    // ホールド直後も押しっぱなし入力を反映
+    if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
+    if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
@@ -309,7 +308,6 @@ function update() {
         if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
     }
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    
     for (let y=0; y<ROWS; y++) { 
         for (let x=0; x<COLS; x++) { 
             if (board[y][x]) { 
@@ -325,7 +323,6 @@ function update() {
             } 
         } 
     }
-    
     if(current && clearAnimTimer === 0) {
         drawGhost();
         for (let y=0; y<current.shape.length; y++) { for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); } }
@@ -353,8 +350,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('keydown', e => {
-    if(gameOver || !current || clearAnimTimer > 0) return;
     const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
+    if(gameOver || !current || clearAnimTimer > 0) return;
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
     if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
@@ -371,12 +368,12 @@ window.addEventListener('keyup', e => { const k = e.key.toLowerCase(); keyStates
 
 const bindT = (id, k, act, int = ARR_SPEED, das = true) => {
     const el = document.getElementById(id); if(!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) startAutoMove(k, act, int, das); }, {passive:false});
-    el.addEventListener('touchend', (e) => { e.preventDefault(); stopAutoMove(k); }, {passive:false});
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); keyStates[k] = true; if(!gameOver && current && clearAnimTimer === 0) startAutoMove(k, act, int, das); }, {passive:false});
+    el.addEventListener('touchend', (e) => { e.preventDefault(); keyStates[k] = false; stopAutoMove(k); }, {passive:false});
 };
-bindT('ctrl-left', 'left', () => movePiece(-1));
-bindT('ctrl-right', 'right', () => movePiece(1));
-bindT('ctrl-down', 'down', drop, SOFT_DROP_SPEED, false);
+bindT('ctrl-left', 'arrowleft', () => movePiece(-1));
+bindT('ctrl-right', 'arrowright', () => movePiece(1));
+bindT('ctrl-down', 'arrowdown', drop, SOFT_DROP_SPEED, false);
 const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) fn(); }, {passive:false}); };
 tap('ctrl-up', () => { 
     playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; }
