@@ -20,7 +20,8 @@ const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContex
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
 const VISIBLE_ROWS = 20, TOTAL_ROWS = 40, COLS = 10, SIZE = 24; 
-const DEADLINE_INDEX = 19; // 表示領域の最上段
+// 0-19が隠し領域、20-39が表示領域。DEADLINEは20行目。
+const DISPLAY_START_ROW = 20; 
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00'
@@ -47,16 +48,10 @@ let board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
-let rotationTimestamps = [], score = 0, totalLines = 0, comboCount = -1, isBackToBack = false;
+let rotationTimestamps = [], score = 0, totalLines = 0, comboCount = -1;
 let clearingLines = [], clearAnimTimer = 0, level = 1;
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
-
-function sync(forceReset = false) {
-    if(gameOver && !forceReset) return;
-    const data = forceReset ? { board: Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current ? current.pos : {x:0,y:0}, type: current ? current.type : 'none', shape: current ? current.shape : [] };
-    set(ref(db, `games/${roomId}/player`), data);
-}
 
 function refillBag() {
     let p = ['i','o','t','s','z','j','l'];
@@ -83,20 +78,19 @@ function spawn(type = null) {
     let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     
-    // 出現位置の試行：基本は19行目（表示最上段）に1マスでも重なる位置から
-    let spawnY = 18; 
-    let nextP = { pos:{x: startX, y: spawnY}, shape:SHAPES[t], type:t };
+    // 出現位置：20行目(インデックス19)に少し触れる高さ(y=18)から開始
+    let nextP = { pos:{x: startX, y: 18}, shape:SHAPES[t], type:t };
 
-    // 衝突している場合は、上にずらして「首の皮一枚」で出せる場所を探す
-    while (collide(board, nextP) && nextP.pos.y > 16 - nextP.shape.length) {
+    // 埋まっているなら上にずらす
+    while (collide(board, nextP) && nextP.pos.y > 20 - nextP.shape.length - 1) {
         nextP.pos.y--;
     }
 
-    // 表示領域（19行目以降）に1マスも触れていない、またはどこにずらしても衝突する場合は死亡
+    // Block Out判定：20行目(インデックス19)以降に1マスも触れていない、または衝突中なら死亡
     let isAnyInVisible = false;
     for (let y = 0; y < nextP.shape.length; y++) {
         for (let x = 0; x < nextP.shape[y].length; x++) {
-            if (nextP.shape[y][x] && (nextP.pos.y + y) >= DEADLINE_INDEX) isAnyInVisible = true;
+            if (nextP.shape[y][x] && (nextP.pos.y + y) >= 19) isAnyInVisible = true;
         }
     }
 
@@ -104,7 +98,7 @@ function spawn(type = null) {
         showGameOver(); return;
     }
 
-    current = nextP; drawNext(); drawHold(); sync();
+    current = nextP; drawNext(); drawHold();
 }
 
 function lockPiece() {
@@ -118,13 +112,13 @@ function lockPiece() {
                 let ny = current.pos.y + y, nx = current.pos.x + x; 
                 if (ny >= 0 && ny < TOTAL_ROWS) {
                     board[ny][nx] = COLORS[current.type];
-                    if (ny >= DEADLINE_INDEX) isAnyInVisible = true;
+                    if (ny >= 19) isAnyInVisible = true;
                 }
             }
         }
     }
 
-    // Lock Out判定：20マス目以降に1マスも無ければ死亡
+    // Lock Out判定
     if (!isAnyInVisible) { showGameOver(); return; }
 
     clearingLines = [];
@@ -156,7 +150,6 @@ function drop() {
     if(gameOver || !current || clearAnimTimer > 0) return; 
     current.pos.y++; 
     if (collide(board, current)) { current.pos.y--; } 
-    else { sync(); } 
 }
 
 function rotate(dir = 1) {
@@ -174,14 +167,14 @@ function rotate(dir = 1) {
         if (!collide(board, current)) { success = true; break; }
     }
     if (!success) { current.shape = oldS; current.pos = oldP; rotationState = oldRS; } 
-    else { playSound('rotate'); handleMoveReset(); sync(); }
+    else { playSound('rotate'); handleMoveReset(); }
 }
 
 function movePiece(dir) {
     if (gameOver || !current || clearAnimTimer > 0) return;
     current.pos.x += dir;
     if (collide(board, current)) { current.pos.x -= dir; return false; }
-    playSound('move'); handleMoveReset(); sync(); return true;
+    playSound('move'); handleMoveReset(); return true;
 }
 
 function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
@@ -218,7 +211,7 @@ function drawGhost() {
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
     for (let y=0; y<current.shape.length; y++) {
         for (let x=0; x<current.shape[y].length; x++) { 
-            let drawY = g.y + y - DEADLINE_INDEX;
+            let drawY = g.y + y - DISPLAY_START_ROW;
             if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) drawBlock(ctx, g.x+x, drawY, COLORS[current.type], 0.2); 
         }
     }
@@ -245,7 +238,6 @@ function drawNext() {
                 if (SHAPES[t][y][x]) drawBlock(nCtx, x + offX, y + yPos, COLORS[t], 1, blockSize);
             }
         }
-        if (isFirst) { nCtx.strokeStyle = '#333'; nCtx.beginPath(); nCtx.moveTo(5, 58); nCtx.lineTo(55, 58); nCtx.stroke(); }
     }
 }
 
@@ -258,12 +250,13 @@ function update() {
     }
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
     
-    for (let y = DEADLINE_INDEX; y < TOTAL_ROWS; y++) { 
+    // 描画範囲：20行目(インデックス20)から39行目まで
+    for (let y = DISPLAY_START_ROW; y < TOTAL_ROWS; y++) { 
         for (let x = 0; x < COLS; x++) { 
             if (board[y][x]) { 
                 let color = board[y][x];
                 if (clearingLines.includes(y)) color = "#ffffff";
-                drawBlock(ctx, x, y - DEADLINE_INDEX, color); 
+                drawBlock(ctx, x, y - DISPLAY_START_ROW, color); 
             } 
         } 
     }
@@ -272,7 +265,7 @@ function update() {
         drawGhost();
         for (let y=0; y<current.shape.length; y++) { 
             for (let x=0; x<current.shape[y].length; x++) { 
-                let drawY = current.pos.y + y - DEADLINE_INDEX;
+                let drawY = current.pos.y + y - DISPLAY_START_ROW;
                 if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) {
                     if (board[current.pos.y + y][current.pos.x + x] === null) {
                         drawBlock(ctx, current.pos.x+x, drawY, COLORS[current.type]); 
@@ -284,7 +277,7 @@ function update() {
     requestID = requestAnimationFrame(update);
 }
 
-function showGameOver() { gameOver = true; playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
+function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function updateDropSpeed() {
     if (gameInterval) clearInterval(gameInterval);
