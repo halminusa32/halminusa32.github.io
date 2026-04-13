@@ -2,76 +2,41 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HALRIS SOLO - PERFECT Edition</title>
+    <title>Tetris Online - 40Rows Edition</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="side-info">
-        <h1>HALRIS SOLO<br>はるリス ソロ</h1>
-        <p>O-Spin→I / S/Z-Spin→O<br>
-           S/Z-O-Spin→I<br>
-           O-Spin: 5% GotsuGotsu O-Spin</p>
-        
-        <div class="line-container">
-            <div class="label">SCORE</div>
-            <div id="score-display">0</div>
-            <div class="label" style="margin-top:10px;">LINES</div>
-            <div id="line-count">0</div>
-            <div class="label" style="margin-top:10px;">LEVEL</div>
-            <div id="level">1</div>
-        </div>
-    </div>
-    
-    <div id="room-setup">
-        <p style="margin-bottom: 20px; font-size: 18px;">プレイを開始しますか？</p>
-        <button id="play" class="btn gray" style="width: 140px; border-radius: 10px;">はい</button>
-    </div>
-
-    <div id="game-container" style="display: none;">
-        <div id="combo-container">
-            <div id="combo-count">0</div>
-            <div style="font-size: 16px;">REN</div>
-        </div>
-
-        <div id="perfect-clear-text">PERFECT<br>CLEAR</div>
-
+    <div id="game-container">
         <div class="player-section side">
             <div class="label">HOLD</div>
             <canvas id="hold-canvas" width="60" height="60"></canvas>
-            <div class="label" style="margin-top:20px;">NEXT</div>
+        </div>
+
+        <div class="player-section main">
+            <div id="score-board">
+                SCORE: <span id="score-display">0</span> | 
+                LINES: <span id="line-count">0</span> | 
+                LEVEL: <span id="level">1</span>
+            </div>
+            <canvas id="tetris" width="240" height="480"></canvas>
+            
+            <div id="combo-container">COMBO <span id="combo-count">0</span></div>
+            <div id="perfect-clear-text">PERFECT CLEAR!</div>
+        </div>
+
+        <div class="player-section side">
+            <div class="label">NEXT</div>
             <canvas id="next-canvas" width="60" height="220"></canvas>
         </div>
-
-
-        <div class="player-section">
-            <div class="label">SOLO</div>
-            <canvas id="tetris" width="240" height="480"></canvas>
-        </div>
     </div>
 
-    <div id="game-over-screen" style="display: none;">
-        <h2 style="font-size: 40px; margin-bottom: 20px;">GAME OVER</h2>
-        <button id="restart-button" class="btn gray" style="width: 150px; height: 50px; border-radius: 10px; font-size: 18px;">RESTART</button>
+    <div id="game-over-screen">
+        <div class="message">GAME OVER</div>
+        <button id="restart-button">RETRY</button>
     </div>
 
-    <div class="touch-controls">
-        <div class="control-left-group">
-            <button id="ctrl-hold" class="btn gray" style="margin-bottom: 10px;">HOLD</button>
-            <div class="d-pad">
-                <button id="ctrl-up" class="btn blue">SPACE(Hard Drop)</button>
-                <div class="move-row">
-                    <button id="ctrl-left" class="btn">←</button>
-                    <button id="ctrl-right" class="btn">→</button>
-                </div>
-                <button id="ctrl-down" class="btn">↓</button>
-            </div>
-        </div>
-
-        <div class="control-right-group">
-            <button id="ctrl-rot-l" class="btn purple">Z</button>
-            <button id="ctrl-rot-r" class="btn purple">X</button>
-        </div>
+    <div id="room-setup">
+        <button id="play">START GAME</button>
     </div>
 
     <script type="module" src="script.js"></script>
