@@ -19,9 +19,9 @@ const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
-const ROWS = 20, COLS = 10, SIZE = 24;
-const O_SPIN_THRESHOLD = 10; 
-const CLEAR_ANIM_DURATION = 18; 
+// 20マスが表示領域、合計40マス。インデックス19が「20マス目(表示最上段)」
+const VISIBLE_ROWS = 20, TOTAL_ROWS = 40, COLS = 10, SIZE = 24; 
+const DEADLINE_INDEX = 19; // 上から数えて20番目（0-19）が表示領域の最上段
 
 const COLORS = { 
     i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00',
@@ -47,16 +47,14 @@ const SRS_KICKS_I = {
     "3->0": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]], "0->3": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]]
 };
 
-let board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+let board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let rotationTimestamps = [], score = 0, totalLines = 0;
 let comboCount = -1, isBackToBack = false;
-
 let clearingLines = []; 
 let clearAnimTimer = 0;
-
 let level = 1;
 const MAX_LEVEL = 15; 
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
@@ -64,7 +62,7 @@ let keyStates = {}, moveTimers = {};
 
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
-    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current ? current.pos : {x:0,y:0}, type: current ? current.type : 'none', shape: current ? current.shape : [] };
+    const data = forceReset ? { board: Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current ? current.pos : {x:0,y:0}, type: current ? current.type : 'none', shape: current ? current.shape : [] };
     set(ref(db, `games/${roomId}/player`), data);
 }
 
@@ -82,7 +80,7 @@ function collide(b, p) {
         for (let x=0; x<p.shape[y].length; x++) {
             if (p.shape[y][x]) {
                 let ny = p.pos.y + y, nx = p.pos.x + x;
-                if (ny >= ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx] !== null)) return true;
+                if (ny >= TOTAL_ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx] !== null)) return true;
             }
         }
     }
@@ -112,7 +110,7 @@ function rotate(dir = 1) {
     if (['o', 's', 'z'].includes(current.type)) {
         rotationTimestamps.push(now);
         while(rotationTimestamps.length > 0 && now - rotationTimestamps[0] > 1000) rotationTimestamps.shift();
-        if (rotationTimestamps.length >= O_SPIN_THRESHOLD) {
+        if (rotationTimestamps.length >= 10) {
             if (!current.isEvolvedToO && (current.type === 's' || current.type === 'z')) {
                 current.shape = JSON.parse(JSON.stringify(SHAPES['o']));
                 current.isEvolvedToO = true; justEvolved = true;
@@ -151,48 +149,38 @@ function handleMoveReset() {
 
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
 
-function calculateScore(cleared, isSpin) {
-    let base = 0, isDifficult = false;
-    if (isSpin) {
-        isDifficult = true;
-        if (cleared === 0) base = 100;
-        else if (cleared === 1) base = 800;
-        else if (cleared === 2) base = 1200;
-        else if (cleared === 3) base = 1600;
-    } else {
-        if (cleared === 1) base = 100; else if (cleared === 2) base = 300; else if (cleared === 3) base = 500; else if (cleared === 4) { base = 800; isDifficult = true; }
-    }
-    if (cleared > 0) {
-        if (isDifficult) { if (isBackToBack) base *= 1.5; isBackToBack = true; } else isBackToBack = false;
-        comboCount++; 
-        if (comboCount > 0) base += Math.min(comboCount, 10) * 50; 
-    } else { comboCount = -1; }
-    if (current.type === 'o_huge') base += 1000;
-    return Math.floor(base * level);
-}
-
-function updateDropSpeed() {
-    if (gameInterval) clearInterval(gameInterval);
-    const speed = Math.max(50, 1000 * Math.pow(0.85, level - 1));
-    gameInterval = setInterval(drop, speed);
-}
-
 function lockPiece() {
     if (!current || gameOver) return;
     if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { lockTimer = null; return; }
+    
+    // 【判定】固定されるミノのうち、1マスでも表示領域(インデックス19以降)にあるか
+    let isAnyInVisible = false;
     for (let y=0; y<current.shape.length; y++) {
         for (let x=0; x<current.shape[y].length; x++) {
-            if (current.shape[y][x]) { let ny = current.pos.y + y, nx = current.pos.x + x; if (ny >= 0 && ny < ROWS) board[ny][nx] = COLORS[current.type]; }
+            if (current.shape[y][x]) { 
+                let ny = current.pos.y + y, nx = current.pos.x + x; 
+                if (ny >= 0 && ny < TOTAL_ROWS) {
+                    board[ny][nx] = COLORS[current.type];
+                    if (ny >= DEADLINE_INDEX) isAnyInVisible = true;
+                }
+            }
         }
     }
+
+    // 【Lock Out判定】表示領域（20マス目以降）に1マスも置けなかったら死亡
+    if (!isAnyInVisible) {
+        showGameOver();
+        return;
+    }
+
     clearingLines = [];
-    for (let y = 0; y < ROWS; y++) { if (board[y].every(cell => cell !== null)) clearingLines.push(y); }
+    for (let y = 0; y < TOTAL_ROWS; y++) { if (board[y].every(cell => cell !== null)) clearingLines.push(y); }
     const isSpin = (rotationTimestamps.length > 0);
     const cleared = clearingLines.length;
     if (cleared > 0) {
         if (cleared === 4) playSound('tetris'); else playSound('clear');
-        clearAnimTimer = CLEAR_ANIM_DURATION; 
-        score += calculateScore(cleared, isSpin);
+        clearAnimTimer = 18; 
+        score += Math.floor(cleared * 100 * level);
         totalLines += cleared;
     } else {
         comboCount = -1; playSound('lock'); finishLocking();
@@ -201,35 +189,17 @@ function lockPiece() {
 
 function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
-    while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
+    while (nextB.length < TOTAL_ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
     canHold = true;
-
-    const comboEl = document.getElementById('combo-container');
-    const comboCountEl = document.getElementById('combo-count');
-    if (comboCount > 0) {
-        comboCountEl.innerText = comboCount;
-        comboEl.classList.remove('active');
-        void comboEl.offsetWidth; 
-        comboEl.classList.add('active');
-    } else { comboEl.classList.remove('active'); }
-
-    const isAllClear = board.every(row => row.every(cell => cell === null));
-    if (isAllClear) {
-        score += 3000; playSound('perfect');
-        const pcText = document.getElementById('perfect-clear-text');
-        if (pcText) { pcText.classList.remove('pc-animate'); void pcText.offsetWidth; pcText.classList.add('pc-animate'); }
-    }
-
-    level = Math.min(MAX_LEVEL, Math.floor(totalLines / 10) + 1);
+    level = Math.min(15, Math.floor(totalLines / 10) + 1);
     document.getElementById('line-count').innerText = totalLines;
     document.getElementById('score-display').innerText = score;
     document.getElementById('level').innerText = level;
-    
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
     rotationTimestamps = []; clearingLines = []; 
     spawn();
-
+    // 押しっぱなし入力を再反映
     if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
     if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
     if (keyStates['arrowdown']) { stopAutoMove('down'); startAutoMove('down', drop, SOFT_DROP_SPEED, false); }
@@ -239,25 +209,24 @@ function spawn(type = null) {
     lockResetCount = 0; rotationState = 0;
     let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
-    let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
+    
+    // 出現位置：20マス目（19）のすぐ上の隠し領域（17-18あたり）
+    let nextP = { pos:{x: startX, y: 17}, shape:SHAPES[t], type:t };
 
-    // ゲームオーバー判定の修正
-    // 1マスも置けない（＝全てのブロック位置が衝突する）場合のみゲームオーバー
-    let canPlaceAny = false;
+    // 【Block Out判定】表示領域（19行目以降）に、このミノが使える空きマスが1つでもあるか
+    let canVisiblePlace = false;
     for (let y = 0; y < nextP.shape.length; y++) {
         for (let x = 0; x < nextP.shape[y].length; x++) {
             if (nextP.shape[y][x]) {
                 let ny = nextP.pos.y + y, nx = nextP.pos.x + x;
-                // 画面内かつボードが空いているマスが1つでもあればセーフ
-                if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS && board[ny][nx] === null) {
-                    canPlaceAny = true;
+                if (ny >= DEADLINE_INDEX && ny < TOTAL_ROWS && nx >= 0 && nx < COLS) {
+                    if (board[ny][nx] === null) canVisiblePlace = true;
                 }
             }
         }
     }
 
-    if (!canPlaceAny) { showGameOver(); return; }
-    
+    if (!canVisiblePlace) { showGameOver(); return; }
     current = nextP; drawNext(); drawHold(); sync();
 }
 
@@ -271,12 +240,10 @@ function drop() {
 function hold() {
     if (!canHold || gameOver || clearAnimTimer > 0) return;
     playSound('hold');
-    let tempType = (current.type === 'i_evolved' || current.type === 'o_huge' || current.isEvolvedToO || current.isEvolvedToI) ? current.type[0] : current.type;
+    let tempType = current.type;
     if (holdPiece) { let t = holdPiece; holdPiece = tempType; spawn(t); } 
     else { holdPiece = tempType; spawn(); }
     canHold = false; drawHold();
-    if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
-    if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
 }
 
 function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
@@ -286,7 +253,10 @@ function drawGhost() {
     let g = { ...current.pos };
     while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
     for (let y=0; y<current.shape.length; y++) {
-        for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && g.y+y >= 0) drawBlock(ctx, g.x+x, g.y+y, COLORS[current.type], 0.2); }
+        for (let x=0; x<current.shape[y].length; x++) { 
+            let drawY = g.y + y - DEADLINE_INDEX; // 表示領域へのオフセット
+            if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) drawBlock(ctx, g.x+x, drawY, COLORS[current.type], 0.2); 
+        }
     }
 }
 
@@ -298,7 +268,6 @@ function drawHold() {
     }
 }
 
-// Next描画の強化版
 function drawNext() {
     nCtx.clearRect(0, 0, nCanvas.width, nCanvas.height);
     for (let i = 0; i < 5; i++) {
@@ -307,16 +276,12 @@ function drawNext() {
         const blockSize = isFirst ? 15 : 11;
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
         let yPos = isFirst ? 1 : 4.8 + (i - 1) * 3.2;
-
         for (let y = 0; y < SHAPES[t].length; y++) {
             for (let x = 0; x < SHAPES[t][y].length; x++) {
                 if (SHAPES[t][y][x]) drawBlock(nCtx, x + offX, y + yPos, COLORS[t], 1, blockSize);
             }
         }
-        if (isFirst) {
-            nCtx.strokeStyle = '#333'; nCtx.beginPath();
-            nCtx.moveTo(5, 58); nCtx.lineTo(55, 58); nCtx.stroke();
-        }
+        if (isFirst) { nCtx.strokeStyle = '#333'; nCtx.beginPath(); nCtx.moveTo(5, 58); nCtx.lineTo(55, 58); nCtx.stroke(); }
     }
 }
 
@@ -328,39 +293,47 @@ function update() {
         if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
     }
     ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    for (let y=0; y<ROWS; y++) { 
-        for (let x=0; x<COLS; x++) { 
+    
+    // 盤面描画（DEADLINE_INDEXから表示）
+    for (let y = DEADLINE_INDEX; y < TOTAL_ROWS; y++) { 
+        for (let x = 0; x < COLS; x++) { 
             if (board[y][x]) { 
                 let color = board[y][x];
                 let opacity = 1;
-                if (clearingLines.includes(y)) {
-                    const progress = (CLEAR_ANIM_DURATION - clearAnimTimer) / CLEAR_ANIM_DURATION;
-                    const wavePos = progress * COLS;
-                    if (x < wavePos - 1) { color = "#ffffff"; opacity = 0.3; } 
-                    else if (x < wavePos + 1) { color = "#ffffff"; opacity = 1.0; }
-                }
-                drawBlock(ctx, x, y, color, opacity); 
+                if (clearingLines.includes(y)) color = "#ffffff";
+                drawBlock(ctx, x, y - DEADLINE_INDEX, color, opacity); 
             } 
         } 
     }
+    
+    // 操作ミノ描画（重なってる部分は非表示）
     if(current && clearAnimTimer === 0) {
         drawGhost();
-        for (let y=0; y<current.shape.length; y++) { for (let x=0; x<current.shape[y].length; x++) { if (current.shape[y][x] && current.pos.y+y >= 0) drawBlock(ctx, current.pos.x+x, current.pos.y+y, COLORS[current.type]); } }
+        for (let y=0; y<current.shape.length; y++) { 
+            for (let x=0; x<current.shape[y].length; x++) { 
+                let drawY = current.pos.y + y - DEADLINE_INDEX;
+                if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) {
+                    // 盤面と重なっていない部分だけ描画
+                    if (board[current.pos.y + y][current.pos.x + x] === null) {
+                        drawBlock(ctx, current.pos.x+x, drawY, COLORS[current.type]); 
+                    }
+                } 
+            } 
+        }
     }
     requestID = requestAnimationFrame(update);
 }
 
-function showGameOver() { gameOver = true; playSound('gameover'); document.getElementById('game-over-screen').style.display = 'flex'; }
+function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
     initAudio(); 
     document.getElementById('game-over-screen').style.display = 'none';
-    if(document.getElementById('room-setup')) document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-container').style.display = 'flex';
     if (gameInterval) clearInterval(gameInterval); if (requestID) cancelAnimationFrame(requestID);
-    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
     gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; 
-    score = 0; totalLines = 0; level = 1; comboCount = -1; isBackToBack = false; clearAnimTimer = 0;
+    score = 0; totalLines = 0; level = 1; clearAnimTimer = 0;
     refillBag(); updateNextQueue(); spawn(); update(); updateDropSpeed();
 }
 
@@ -378,7 +351,7 @@ window.addEventListener('keydown', e => {
     if (k === 'arrowup' || k === 'x') rotate(1);
     if (k === 'z') rotate(-1);
     if (k === ' ') { 
-        playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; }
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; }
         lockPiece(); 
     }
     if (k === 'c' || k === 'shift') hold();
@@ -395,23 +368,10 @@ bindT('ctrl-left', 'arrowleft', () => movePiece(-1));
 bindT('ctrl-right', 'arrowright', () => movePiece(1));
 bindT('ctrl-down', 'arrowdown', drop, SOFT_DROP_SPEED, false);
 const tap = (id, fn) => { const el = document.getElementById(id); if(el) el.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); if(!gameOver && current && clearAnimTimer === 0) fn(); }, {passive:false}); };
-tap('ctrl-up', () => { 
-    playSound('harddrop'); while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; }
-    lockPiece(); 
-});
+tap('ctrl-up', () => { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; } lockPiece(); });
 tap('ctrl-rot-r', () => rotate(1)); tap('ctrl-rot-l', () => rotate(-1)); tap('ctrl-hold', hold);
 
-const SOUND_FILES = {
-    move: 'https://halminusa32.github.io/halris/solo/move.mp3', 
-    rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
-    tetris: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3',
-    lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg',
-    harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg',
-    hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg',
-    perfect: 'https://halminusa32.github.io/halris/solo/solian-te-n.mp3',
-    gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg'
-};
+const SOUND_FILES = { move: 'https://halminusa32.github.io/halris/solo/move.mp3', rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3', lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', harddrop: 'https://actions.google.com/sounds/v1/foley/wooden_door_slam.ogg', hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg', gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg' };
 let audioCtx = null; const audioBuffers = {};
 function initAudio() { if (audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); Object.keys(SOUND_FILES).forEach(name => { fetch(SOUND_FILES[name]).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buffer => { audioBuffers[name] = buffer; }); }); }
 function playSound(name) { if (!audioCtx || !audioBuffers[name]) return; const source = audioCtx.createBufferSource(); source.buffer = audioBuffers[name]; const gainNode = audioCtx.createGain(); gainNode.gain.value = (name === 'move') ? 0.15 : 0.4; source.connect(gainNode); gainNode.connect(audioCtx.destination); source.start(0); }
