@@ -62,12 +62,9 @@ const MAX_LEVEL = 15;
 const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
 let keyStates = {}, moveTimers = {};   
 
-let lastSyncedPos = {x: 0, y: 0, r: 0};
-
 function sync(forceReset = false) {
     if(gameOver && !forceReset) return;
-    if (current) lastSyncedPos = {x: current.pos.x, y: current.pos.y, r: rotationState};
-    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current.pos, type: current.type, shape: current.shape };
+    const data = forceReset ? { board: Array.from({length: ROWS}, () => Array(COLS).fill(null)), pos: {x:0,y:0}, type: 'none' } : { board, pos: current ? current.pos : {x:0,y:0}, type: current ? current.type : 'none', shape: current ? current.shape : [] };
     set(ref(db, `games/${roomId}/player`), data);
 }
 
@@ -206,7 +203,6 @@ function finishLocking() {
     let nextB = board.filter((_, i) => !clearingLines.includes(i));
     while (nextB.length < ROWS) nextB.unshift(Array(COLS).fill(null));
     board = nextB;
-
     canHold = true;
 
     const comboEl = document.getElementById('combo-container');
@@ -232,10 +228,8 @@ function finishLocking() {
     
     if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
     rotationTimestamps = []; clearingLines = []; 
-    
     spawn();
 
-    // 次のミノが出た瞬間に、押しっぱなしのキーを反映（DAS/ARRの再開）
     if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
     if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
     if (keyStates['arrowdown']) { stopAutoMove('down'); startAutoMove('down', drop, SOFT_DROP_SPEED, false); }
@@ -246,7 +240,24 @@ function spawn(type = null) {
     let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
     let nextP = { pos:{x: startX, y: 0}, shape:SHAPES[t], type:t };
-    if (collide(board, nextP)) { showGameOver(); return; }
+
+    // ゲームオーバー判定の修正
+    // 1マスも置けない（＝全てのブロック位置が衝突する）場合のみゲームオーバー
+    let canPlaceAny = false;
+    for (let y = 0; y < nextP.shape.length; y++) {
+        for (let x = 0; x < nextP.shape[y].length; x++) {
+            if (nextP.shape[y][x]) {
+                let ny = nextP.pos.y + y, nx = nextP.pos.x + x;
+                // 画面内かつボードが空いているマスが1つでもあればセーフ
+                if (ny >= 0 && ny < ROWS && nx >= 0 && nx < COLS && board[ny][nx] === null) {
+                    canPlaceAny = true;
+                }
+            }
+        }
+    }
+
+    if (!canPlaceAny) { showGameOver(); return; }
+    
     current = nextP; drawNext(); drawHold(); sync();
 }
 
@@ -264,8 +275,6 @@ function hold() {
     if (holdPiece) { let t = holdPiece; holdPiece = tempType; spawn(t); } 
     else { holdPiece = tempType; spawn(); }
     canHold = false; drawHold();
-    
-    // ホールド直後も押しっぱなし入力を反映
     if (keyStates['arrowleft']) { stopAutoMove('left'); startAutoMove('left', () => movePiece(-1)); }
     if (keyStates['arrowright']) { stopAutoMove('right'); startAutoMove('right', () => movePiece(1)); }
 }
@@ -289,13 +298,24 @@ function drawHold() {
     }
 }
 
+// Next描画の強化版
 function drawNext() {
-    nCtx.clearRect(0,0,nCanvas.width,nCanvas.height);
-    for(let i=0; i<4; i++) {
-        let t = nextQueue[i]; if(!t) continue;
+    nCtx.clearRect(0, 0, nCanvas.width, nCanvas.height);
+    for (let i = 0; i < 5; i++) {
+        let t = nextQueue[i]; if (!t) continue;
+        const isFirst = (i === 0);
+        const blockSize = isFirst ? 15 : 11;
         const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        for (let y=0; y<SHAPES[t].length; y++) {
-            for (let x=0; x<SHAPES[t][y].length; x++) { if (SHAPES[t][y][x]) drawBlock(nCtx, x+offX, y+1+(i*3.5), COLORS[t], 1, 15); }
+        let yPos = isFirst ? 1 : 4.8 + (i - 1) * 3.2;
+
+        for (let y = 0; y < SHAPES[t].length; y++) {
+            for (let x = 0; x < SHAPES[t][y].length; x++) {
+                if (SHAPES[t][y][x]) drawBlock(nCtx, x + offX, y + yPos, COLORS[t], 1, blockSize);
+            }
+        }
+        if (isFirst) {
+            nCtx.strokeStyle = '#333'; nCtx.beginPath();
+            nCtx.moveTo(5, 58); nCtx.lineTo(55, 58); nCtx.stroke();
         }
     }
 }
