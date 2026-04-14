@@ -15,52 +15,54 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const roomId = "solo-room-data";
 
+// HTML要素
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
-const VISIBLE_ROWS = 20, TOTAL_ROWS = 40, COLS = 10, SIZE = 24; 
-// 0-19が隠し領域、20-39が表示領域。DEADLINEは20行目。
-const DISPLAY_START_ROW = 20; 
-
-const COLORS = { 
-    i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00'
-};
+// ゲーム定数
+const VISIBLE_ROWS = 22, TOTAL_ROWS = 40, COLS = 10, SIZE = 24; 
+const DISPLAY_START_ROW = 18; 
+const COLORS = { i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00' };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
-
 const SRS_KICKS = {
     "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]], "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
     "1->2": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]], "2->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
     "2->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
     "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]], "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
 };
-const SRS_KICKS_I = {
-    "0->1": [[0,0], [-2,0], [ 1,0], [-2,-1], [ 1, 2]], "1->0": [[0,0], [ 2,0], [-1,0], [ 2, 1], [-1,-2]],
-    "1->2": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]], "2->1": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]],
-    "2->3": [[0,0], [ 2,0], [-1,0], [ 2, 1], [-1,-2]], "3->2": [[0,0], [-2,0], [ 1,0], [-2,-1], [ 1, 2]],
-    "3->0": [[0,0], [ 1,0], [-2,0], [ 1,-2], [-2, 1]], "0->3": [[0,0], [-1,0], [ 2,0], [-1, 2], [ 2,-1]]
-};
 
+// ゲーム変数
 let board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = false, holdPiece = null, canHold = true, bag = [], nextQueue = [];
 let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
 const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
-let rotationTimestamps = [], score = 0, totalLines = 0, comboCount = -1;
-let clearingLines = [], clearAnimTimer = 0, level = 1;
-const DAS_DELAY = 150, ARR_SPEED = 30, SOFT_DROP_SPEED = 15; 
-let keyStates = {}, moveTimers = {};   
+let score = 0, totalLines = 0, level = 1;
+let keyStates = {}, moveTimers = {};
+let particles = []; 
+let isSpinning = false; // Spin系入力中フラグ
 
+// --- ヘルパー: 盤面アニメーションクラスの付け外し ---
+function triggerBoardAnim(animClass) {
+    canvas.classList.remove('anim-harddrop', 'anim-hit-left', 'anim-hit-right'); // 既存をクリア
+    void canvas.offsetWidth; // リフローを起こしてアニメーションを再トリガー
+    canvas.classList.add(animClass);
+    // アニメーション終了時にクラスを削除（Spin用以外）
+    if(!animClass.includes('spin')) {
+        setTimeout(() => canvas.classList.remove(animClass), 200);
+    }
+}
+
+// 基礎機能
 function refillBag() {
     let p = ['i','o','t','s','z','j','l'];
     for(let i=p.length-1; i>0; i--) { let j=Math.floor(Math.random()*(i+1)); [p[i],p[j]]=[p[j],p[i]]; }
     bag = [...p];
 }
-
 function updateNextQueue() { while(nextQueue.length < 5) { if(bag.length === 0) refillBag(); nextQueue.push(bag.pop()); } }
-
 function collide(b, p) {
     for (let y=0; y<p.shape.length; y++) {
         for (let x=0; x<p.shape[y].length; x++) {
@@ -73,32 +75,26 @@ function collide(b, p) {
     return false;
 }
 
+// ロジック
 function spawn(type = null) {
     lockResetCount = 0; rotationState = 0;
     let t = type || nextQueue.shift(); updateNextQueue();
     let startX = (t === 'o') ? 4 : 3;
-    
-    // 出現位置：20行目(インデックス19)に少し触れる高さ(y=18)から開始
     let nextP = { pos:{x: startX, y: 18}, shape:SHAPES[t], type:t };
+    while (collide(board, nextP) && nextP.pos.y > 0) { nextP.pos.y--; }
+    if (collide(board, nextP)) { showGameOver(); return; }
+    current = nextP; drawNext(); drawHold();
+}
 
-    // 埋まっているなら上にずらす
-    while (collide(board, nextP) && nextP.pos.y > 20 - nextP.shape.length - 1) {
-        nextP.pos.y--;
-    }
-
-    // Block Out判定：20行目(インデックス19)以降に1マスも触れていない、または衝突中なら死亡
-    let isAnyInVisible = false;
-    for (let y = 0; y < nextP.shape.length; y++) {
-        for (let x = 0; x < nextP.shape[y].length; x++) {
-            if (nextP.shape[y][x] && (nextP.pos.y + y) >= 19) isAnyInVisible = true;
+function createParticles(y, color) {
+    for (let x = 0; x < COLS; x++) {
+        for (let i = 0; i < 2; i++) {
+            particles.push({
+                x: x * SIZE + Math.random() * SIZE, y: (y - DISPLAY_START_ROW) * SIZE + Math.random() * SIZE,
+                vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 5) * 2, life: 1.0, color: color || '#fff'
+            });
         }
     }
-
-    if (collide(board, nextP) || !isAnyInVisible) {
-        showGameOver(); return;
-    }
-
-    current = nextP; drawNext(); drawHold();
 }
 
 function lockPiece() {
@@ -110,57 +106,44 @@ function lockPiece() {
         for (let x=0; x<current.shape[y].length; x++) {
             if (current.shape[y][x]) { 
                 let ny = current.pos.y + y, nx = current.pos.x + x; 
-                if (ny >= 0 && ny < TOTAL_ROWS) {
-                    board[ny][nx] = COLORS[current.type];
-                    if (ny >= 19) isAnyInVisible = true;
-                }
+                if (ny >= 0 && ny < TOTAL_ROWS) { board[ny][nx] = COLORS[current.type]; if (ny >= 19) isAnyInVisible = true; }
             }
         }
     }
-
-    // Lock Out判定
     if (!isAnyInVisible) { showGameOver(); return; }
 
-    clearingLines = [];
-    for (let y = 0; y < TOTAL_ROWS; y++) { if (board[y].every(cell => cell !== null)) clearingLines.push(y); }
-    if (clearingLines.length > 0) {
+    let linesToClear = [];
+    for (let y = 0; y < TOTAL_ROWS; y++) { if (board[y].every(cell => cell !== null)) linesToClear.push(y); }
+    if (linesToClear.length > 0) {
         playSound('clear');
-        clearAnimTimer = 18; 
-        score += clearingLines.length * 100 * level;
-        totalLines += clearingLines.length;
-    } else {
-        playSound('lock'); finishLocking();
-    }
-}
-
-function finishLocking() {
-    let nextB = board.filter((_, i) => !clearingLines.includes(i));
-    while (nextB.length < TOTAL_ROWS) nextB.unshift(Array(COLS).fill(null));
-    board = nextB;
-    canHold = true;
-    level = Math.floor(totalLines / 10) + 1;
-    document.getElementById('line-count').innerText = totalLines;
-    document.getElementById('score-display').innerText = score;
-    document.getElementById('level').innerText = level;
-    if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
-    clearingLines = []; spawn();
+        linesToClear.forEach(y => {
+            createParticles(y, '#fff');
+            board.splice(y, 1); board.unshift(Array(COLS).fill(null));
+        });
+        score += linesToClear.length * 100 * level; totalLines += linesToClear.length;
+        level = Math.floor(totalLines / 10) + 1;
+        document.getElementById('line-count').innerText = totalLines;
+        document.getElementById('score-display').innerText = score;
+        document.getElementById('level').innerText = level;
+    } else { playSound('lock'); }
+    canHold = true; if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; }
+    spawn();
 }
 
 function drop() { 
-    if(gameOver || !current || clearAnimTimer > 0) return; 
+    if(gameOver || !current) return; 
     current.pos.y++; 
     if (collide(board, current)) { current.pos.y--; } 
 }
 
 function rotate(dir = 1) {
-    if (gameOver || !current || clearAnimTimer > 0) return;
+    if (gameOver || !current) return;
     const oldS = JSON.parse(JSON.stringify(current.shape)), oldP = {...current.pos}, oldRS = rotationState;
     if (dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
     else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length - 1 - i]));
     rotationState = (rotationState + dir + 4) % 4;
 
-    let kickSet = (current.type === 'i') ? SRS_KICKS_I[`${oldRS}->${rotationState}`] : SRS_KICKS[`${oldRS}->${rotationState}`];
-    kickSet = kickSet || [[0,0]];
+    let kickSet = SRS_KICKS[`${oldRS}->${rotationState}`] || [[0,0]];
     let success = false;
     for (let k of kickSet) {
         current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1];
@@ -170,146 +153,110 @@ function rotate(dir = 1) {
     else { playSound('rotate'); handleMoveReset(); }
 }
 
+// 【修正】移動関数: 壁衝突時にアニメーションをトリガー
 function movePiece(dir) {
-    if (gameOver || !current || clearAnimTimer > 0) return;
+    if (gameOver || !current) return;
     current.pos.x += dir;
-    if (collide(board, current)) { current.pos.x -= dir; return false; }
+    if (collide(board, current)) { 
+        current.pos.x -= dir; 
+        // 壁にぶつかった方向に応じてアニメーション
+        triggerBoardAnim(dir === -1 ? 'anim-hit-left' : 'anim-hit-right');
+        return false; 
+    }
     playSound('move'); handleMoveReset(); return true;
 }
 
-function startAutoMove(key, action, interval = ARR_SPEED, useDas = true) {
+function startAutoMove(key, action, interval = 30, useDas = true) {
     if (moveTimers[key]) return;
     action(); 
-    if (useDas) moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, DAS_DELAY) };
+    if (useDas) moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, 150) };
     else moveTimers[key] = { interval: setInterval(action, interval) };
 }
-
 function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
-
-function handleMoveReset() {
-    if (current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) {
-        if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); }
-    }
-}
-
+function handleMoveReset() { if (current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) { if (lockResetCount < MAX_LOCK_RESETS) { lockResetCount++; resetLockTimer(); } } }
 function resetLockTimer() { if (lockTimer) { clearTimeout(lockTimer); lockTimer = null; } }
+function hold() { if (!canHold || gameOver) return; playSound('hold'); let tempType = current.type; if (holdPiece) { let t = holdPiece; holdPiece = tempType; spawn(t); } else { holdPiece = tempType; spawn(); } canHold = false; drawHold(); }
 
-function hold() {
-    if (!canHold || gameOver || clearAnimTimer > 0) return;
-    playSound('hold');
-    let tempType = current.type;
-    if (holdPiece) { let t = holdPiece; holdPiece = tempType; spawn(t); } 
-    else { holdPiece = tempType; spawn(); }
-    canHold = false; drawHold();
-}
-
-function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 0.5, sz - 0.5); c.globalAlpha = 1; }
-
-function drawGhost() {
-    if (!current || clearAnimTimer > 0) return;
-    let g = { ...current.pos };
-    while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
-    for (let y=0; y<current.shape.length; y++) {
-        for (let x=0; x<current.shape[y].length; x++) { 
-            let drawY = g.y + y - DISPLAY_START_ROW;
-            if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) drawBlock(ctx, g.x+x, drawY, COLORS[current.type], 0.2); 
-        }
+// 描画系
+function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x * sz, y * sz, sz - 1, sz - 1); c.globalAlpha = 1; }
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life -= 0.02;
+        if (p.life <= 0) particles.splice(i, 1);
+        else { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); }
     }
-}
-
-function drawHold() {
-    hCtx.clearRect(0,0,hCanvas.width,hCanvas.height); if (!holdPiece) return;
-    const offX = (holdPiece === 'i' || holdPiece === 'o') ? 0.5 : 1;
-    for (let y=0; y<SHAPES[holdPiece].length; y++) {
-        for (let x=0; x<SHAPES[holdPiece][y].length; x++) { if (SHAPES[holdPiece][y][x]) drawBlock(hCtx, x+offX, y+1, COLORS[holdPiece], 1, 15); }
-    }
-}
-
-function drawNext() {
-    nCtx.clearRect(0, 0, nCanvas.width, nCanvas.height);
-    for (let i = 0; i < 5; i++) {
-        let t = nextQueue[i]; if (!t) continue;
-        const isFirst = (i === 0);
-        const blockSize = isFirst ? 15 : 11;
-        const offX = (t === 'i' || t === 'o') ? 0.5 : 1;
-        let yPos = isFirst ? 1 : 4.8 + (i - 1) * 3.2;
-        for (let y = 0; y < SHAPES[t].length; y++) {
-            for (let x = 0; x < SHAPES[t][y].length; x++) {
-                if (SHAPES[t][y][x]) drawBlock(nCtx, x + offX, y + yPos, COLORS[t], 1, blockSize);
-            }
-        }
-    }
+    ctx.globalAlpha = 1;
 }
 
 function update() {
     if (gameOver) return;
-    if (clearAnimTimer > 0) { clearAnimTimer--; if (clearAnimTimer === 0) finishLocking(); } 
-    else {
-        const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-        if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
-    }
-    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    
-    // 描画範囲：20行目(インデックス20)から39行目まで
+    const grounded = current && collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
+    if (grounded && !lockTimer) lockTimer = setTimeout(lockPiece, LOCK_DELAY);
+    ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#111';
+    for(let x=0; x<=COLS; x++) { ctx.beginPath(); ctx.moveTo(x*SIZE, 0); ctx.lineTo(x*SIZE, canvas.height); ctx.stroke(); }
+    for(let y=0; y<=VISIBLE_ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y*SIZE); ctx.lineTo(canvas.width, y*SIZE); ctx.stroke(); }
     for (let y = DISPLAY_START_ROW; y < TOTAL_ROWS; y++) { 
-        for (let x = 0; x < COLS; x++) { 
-            if (board[y][x]) { 
-                let color = board[y][x];
-                if (clearingLines.includes(y)) color = "#ffffff";
-                drawBlock(ctx, x, y - DISPLAY_START_ROW, color); 
-            } 
-        } 
+        for (let x = 0; x < COLS; x++) { if (board[y][x]) { let alpha = (y < 20) ? 0.3 : 1; drawBlock(ctx, x, y - DISPLAY_START_ROW, board[y][x], alpha); } } 
     }
-    
-    if(current && clearAnimTimer === 0) {
-        drawGhost();
-        for (let y=0; y<current.shape.length; y++) { 
-            for (let x=0; x<current.shape[y].length; x++) { 
-                let drawY = current.pos.y + y - DISPLAY_START_ROW;
-                if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) {
-                    if (board[current.pos.y + y][current.pos.x + x] === null) {
-                        drawBlock(ctx, current.pos.x+x, drawY, COLORS[current.type]); 
-                    }
-                } 
-            } 
-        }
+    if(current) {
+        let g = { ...current.pos };
+        while (!collide(board, { pos: { x: g.x, y: g.y + 1 }, shape: current.shape })) g.y++;
+        for (let y=0; y<current.shape.length; y++) { for (let x=0; x<current.shape[y].length; x++) { let drawY = g.y + y - DISPLAY_START_ROW; if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) drawBlock(ctx, g.x+x, drawY, COLORS[current.type], 0.15); } }
+        for (let y=0; y<current.shape.length; y++) { for (let x=0; x<current.shape[y].length; x++) { let drawY = current.pos.y + y - DISPLAY_START_ROW; if (current.shape[y][x] && drawY >= 0 && drawY < VISIBLE_ROWS) { let alpha = (current.pos.y + y < 20) ? 0.5 : 1; drawBlock(ctx, current.pos.x+x, drawY, COLORS[current.type], alpha); } } }
     }
+    updateParticles();
     requestID = requestAnimationFrame(update);
 }
 
 function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; }
-
-function updateDropSpeed() {
-    if (gameInterval) clearInterval(gameInterval);
-    gameInterval = setInterval(drop, Math.max(50, 1000 * Math.pow(0.85, level - 1)));
-}
-
 function resetGame() {
-    initAudio(); 
-    document.getElementById('game-over-screen').style.display = 'none';
+    initAudio(); document.getElementById('game-over-screen').style.display = 'none';
     board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
-    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; 
-    score = 0; totalLines = 0; level = 1; clearAnimTimer = 0;
-    refillBag(); updateNextQueue(); spawn(); update(); updateDropSpeed();
+    gameOver = false; current = null; holdPiece = null; canHold = true; bag = []; nextQueue = []; score = 0; totalLines = 0; level = 1; particles = [];
+    canvas.classList.remove('anim-harddrop', 'anim-hit-left', 'anim-hit-right', 'anim-spin-l', 'anim-spin-r');
+    refillBag(); updateNextQueue(); spawn(); update();
+    if(gameInterval) clearInterval(gameInterval); gameInterval = setInterval(drop, 1000);
 }
 
-const SOUND_FILES = { move: 'https://halminusa32.github.io/halris/solo/move.mp3', rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3', lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg', gameover: 'https://actions.google.com/sounds/v1/human_voices/female_voice_goodbye.ogg' };
+// 音響系
+const SOUND_FILES = { move: 'https://halminusa32.github.io/halris/solo/move.mp3', rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3', lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg' };
 let audioCtx = null; const audioBuffers = {};
 function initAudio() { if (audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); Object.keys(SOUND_FILES).forEach(name => { fetch(SOUND_FILES[name]).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buffer => { audioBuffers[name] = buffer; }); }); }
 function playSound(name) { if (!audioCtx || !audioBuffers[name]) return; const source = audioCtx.createBufferSource(); source.buffer = audioBuffers[name]; const gainNode = audioCtx.createGain(); gainNode.gain.value = 0.3; source.connect(gainNode); gainNode.connect(audioCtx.destination); source.start(0); }
 
+// 入力系
 document.getElementById('play').onclick = resetGame; 
 document.getElementById('restart-button').onclick = resetGame;
 
 window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase(); if (keyStates[k]) return; keyStates[k] = true;
-    if(gameOver || !current || clearAnimTimer > 0) return;
+    if(gameOver || !current) return;
     if (k === 'arrowleft') startAutoMove('left', () => movePiece(-1));
     if (k === 'arrowright') startAutoMove('right', () => movePiece(1));
-    if (k === 'arrowdown') startAutoMove('down', drop, SOFT_DROP_SPEED, false);
-    if (k === 'arrowup' || k === 'x') rotate(1);
-    if (k === 'z') rotate(-1);
-    if (k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; } lockPiece(); }
+    if (k === 'arrowdown') startAutoMove('down', drop, 20, false);
+    
+    // 【修正】Spin系入力開始: クラスを付与
+    if (k === 'arrowup' || k === 'x') { rotate(1); canvas.classList.add('anim-spin-r'); isSpinning = true; }
+    if (k === 'z') { rotate(-1); canvas.classList.add('anim-spin-l'); isSpinning = true; }
+    
+    // 【修正】ハードドロップ: アニメーションをトリガー
+    if (k === ' ') { 
+        while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) { current.pos.y++; } 
+        triggerBoardAnim('anim-harddrop');
+        lockPiece(); 
+    }
     if (k === 'c' || k === 'shift') hold();
 });
-window.addEventListener('keyup', e => { const k = e.key.toLowerCase(); keyStates[k] = false; if (k === 'arrowleft') stopAutoMove('left'); if (k === 'arrowright') stopAutoMove('right'); if (k === 'arrowdown') stopAutoMove('down'); });
+
+// 【修正】keyup: Spinクラスを解除
+window.addEventListener('keyup', e => { 
+    const k = e.key.toLowerCase(); keyStates[k] = false; 
+    if (k === 'arrowleft') stopAutoMove('left'); 
+    if (k === 'arrowright') stopAutoMove('right'); 
+    if (k === 'arrowdown') stopAutoMove('down'); 
+    if (k === 'arrowup' || k === 'x' || k === 'z') {
+        canvas.classList.remove('anim-spin-l', 'anim-spin-r');
+        isSpinning = false;
+    }
+});
