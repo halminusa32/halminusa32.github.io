@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Tetris Online - TETR.IO Style</title>
+    <title>Tetris Online - TETR.IO Ultimate</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,10 +13,9 @@
         </div>
 
         <div class="player-section main">
-            <div id="score-board">
-                SCORE: <span id="score-display">0</span> | 
-                LINES: <span id="line-count">0</span> | 
-                LEVEL: <span id="level">1</span>
+            <div id="overlay-ui">
+                <div class="stat"><small>SCORE</small><br><span id="score-display">0</span></div>
+                <div class="stat"><small>LINES</small><br><span id="line-count">0</span></div>
             </div>
             <canvas id="tetris" width="240" height="520"></canvas>
         </div>
