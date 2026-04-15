@@ -18,16 +18,33 @@ const SRS_KICKS = {
 
 let board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
 let current = null, gameOver = true, holdPiece = null, canHold = true, bag = [], nextQueue = [];
-let lockTimer = null, gameInterval = null, requestID = null, rotationState = 0, lockResetCount = 0;
-const LOCK_DELAY = 500, MAX_LOCK_RESETS = 15;
 let score = 0, totalLines = 0, level = 1, particles = []; 
 let keyStates = {}, moveTimers = {};
+
+// ロックディレイ関連
+let lockDelayTimer = null;
+const LOCK_DELAY_MS = 500;
+let lockResetCount = 0;
+const MAX_LOCK_RESETS = 15;
 
 function triggerBoardAnim(cls) {
     canvas.classList.remove('anim-harddrop', 'anim-hit-left', 'anim-hit-right');
     void canvas.offsetWidth;
     canvas.classList.add(cls);
     if(!cls.includes('spin')) setTimeout(() => canvas.classList.remove(cls), 200);
+}
+
+function isGrounded() {
+    if (!current) return false;
+    return collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
+}
+
+function resetLockDelay() {
+    if (lockDelayTimer && lockResetCount < MAX_LOCK_RESETS) {
+        clearTimeout(lockDelayTimer);
+        lockDelayTimer = null;
+        lockResetCount++;
+    }
 }
 
 function refillBag() {
@@ -51,7 +68,8 @@ function collide(b, p) {
 }
 
 function spawn(type = null) {
-    lockResetCount = 0; rotationState = 0;
+    lockResetCount = 0;
+    if (lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
     let t = type || nextQueue.shift(); updateNextQueue();
     let nextP = { pos:{x: (t === 'o') ? 4 : 3, y: 18}, shape:SHAPES[t], type:t };
     while (collide(board, nextP) && nextP.pos.y > 0) nextP.pos.y--;
@@ -61,15 +79,13 @@ function spawn(type = null) {
 
 function lockPiece() {
     if (!current || gameOver) return;
-    if (!collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape })) return;
-    
     current.shape.forEach((row, y) => row.forEach((val, x) => {
         if (val) {
             let ny = current.pos.y + y;
             if (ny >= 0 && ny < TOTAL_ROWS) board[ny][current.pos.x + x] = COLORS[current.type];
         }
     }));
-
+    
     let lines = [];
     board.forEach((row, y) => { if (row.every(cell => cell !== null)) lines.push(y); });
     if (lines.length > 0) {
@@ -83,13 +99,17 @@ function lockPiece() {
         document.getElementById('line-count').innerText = totalLines;
     } else playSound('lock');
 
-    canHold = true; spawn();
+    canHold = true;
+    spawn();
 }
 
 function drop() {
     if(gameOver || !current) return;
     current.pos.y++;
-    if(collide(board, current)) { current.pos.y--; lockPiece(); }
+    if(collide(board, current)) {
+        current.pos.y--;
+        if (!lockDelayTimer) lockDelayTimer = setTimeout(lockPiece, LOCK_DELAY_MS);
+    }
 }
 
 function rotate(dir) {
@@ -101,14 +121,23 @@ function rotate(dir) {
     let kicks = SRS_KICKS[`${oldR}->${rotationState}`] || [[0,0]];
     if(!kicks.some(k => { current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1]; return !collide(board, current); })) {
         current.shape = oldS; current.pos = oldP; rotationState = oldR;
-    } else playSound('rotate');
+    } else {
+        playSound('rotate');
+        resetLockDelay();
+    }
 }
 
 function move(dir) {
     if(gameOver || !current) return;
     current.pos.x += dir;
-    if(collide(board, current)) { current.pos.x -= dir; triggerBoardAnim(dir < 0 ? 'anim-hit-left' : 'anim-hit-right'); return false; }
-    playSound('move'); return true;
+    if(collide(board, current)) { 
+        current.pos.x -= dir; 
+        triggerBoardAnim(dir < 0 ? 'anim-hit-left' : 'anim-hit-right');
+        return false; 
+    }
+    playSound('move');
+    resetLockDelay();
+    return true;
 }
 
 function startAutoMove(key, action, interval = 30) {
@@ -121,6 +150,13 @@ function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fi
 
 function update() {
     if (gameOver) return;
+
+    if (isGrounded()) {
+        if (!lockDelayTimer) lockDelayTimer = setTimeout(lockPiece, LOCK_DELAY_MS);
+    } else {
+        if (lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
+    }
+
     ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.strokeStyle = '#111';
     for(let i=0; i<=COLS; i++) { ctx.beginPath(); ctx.moveTo(i*SIZE,0); ctx.lineTo(i*SIZE,canvas.height); ctx.stroke(); }
@@ -160,17 +196,16 @@ let audioCtx = null, audioBuffers = {};
 function initAudio() { if(audioCtx) return; audioCtx = new AudioContext(); Object.keys(SOUND_FILES).forEach(n => fetch(SOUND_FILES[n]).then(r => r.arrayBuffer()).then(d => audioCtx.decodeAudioData(d)).then(b => audioBuffers[n] = b)); }
 function playSound(n) { if(audioBuffers[n]) { let s = audioCtx.createBufferSource(); s.buffer = audioBuffers[n]; s.connect(audioCtx.destination); s.start(0); } }
 
-function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; clearInterval(gameInterval); }
+function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; }
 
 function resetGame() {
     initAudio();
     board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
-    score = 0; totalLines = 0; level = 1; gameOver = false; holdPiece = null; bag = []; nextQueue = []; particles = [];
+    score = 0; totalLines = 0; level = 1; gameOver = false; holdPiece = null; canHold = true; bag = []; nextQueue = []; particles = [];
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-over-screen').style.display = 'none';
     refillBag(); updateNextQueue(); spawn(); update();
-    if(gameInterval) clearInterval(gameInterval);
-    gameInterval = setInterval(drop, 1000);
+    let dropInterval = setInterval(() => { if(!gameOver && !isGrounded()) drop(); }, 1000);
 }
 
 document.getElementById('play').onclick = resetGame;
@@ -183,8 +218,14 @@ window.addEventListener('keydown', e => {
     if(k === 'arrowdown') startAutoMove('d', drop, 50);
     if(k === 'arrowup' || k === 'x') { rotate(1); canvas.classList.add('anim-spin-r'); }
     if(k === 'z') { rotate(-1); canvas.classList.add('anim-spin-l'); }
-    if(k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; triggerBoardAnim('anim-harddrop'); lockPiece(); }
-    if(k === 'c' || k === 'shift') { if(canHold) { let t = holdPiece; holdPiece = current.type; canHold = false; spawn(t); playSound('hold'); } }
+    if(k === ' ') { 
+        if(current) {
+            while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; 
+            triggerBoardAnim('anim-harddrop'); 
+            lockPiece(); 
+        }
+    }
+    if(k === 'c' || k === 'shift') { if(canHold && current) { let t = holdPiece; holdPiece = current.type; canHold = false; spawn(t); playSound('hold'); } }
 });
 window.addEventListener('keyup', e => {
     let k = e.key.toLowerCase(); keyStates[k] = false;
