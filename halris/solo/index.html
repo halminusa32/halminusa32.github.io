@@ -2,39 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Tetris Online - TETR.IO Ultimate</title>
+    <title>Tetris JS Edition</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
-        <div class="player-section side">
-            <div class="label">HOLD</div>
-            <canvas id="hold-canvas" width="60" height="60"></canvas>
-        </div>
-
-        <div class="player-section main">
-            <div id="overlay-ui">
-                <div class="stat"><small>SCORE</small><br><span id="score-display">0</span></div>
-                <div class="stat"><small>LINES</small><br><span id="line-count">0</span></div>
-            </div>
-            <canvas id="tetris" width="240" height="520"></canvas>
-        </div>
-
-        <div class="player-section side">
-            <div class="label">NEXT</div>
-            <canvas id="next-canvas" width="60" height="220"></canvas>
-        </div>
-    </div>
-
-    <div id="game-over-screen">
-        <div class="message">GAME OVER</div>
-        <button id="restart-button">RETRY</button>
-    </div>
-
-    <div id="room-setup">
-        <button id="play">START GAME</button>
-    </div>
-
+    <div id="game-root"></div>
+    <div id="room-setup"><button id="play">START GAME</button></div>
     <script src="script.js"></script>
 </body>
 </html>
