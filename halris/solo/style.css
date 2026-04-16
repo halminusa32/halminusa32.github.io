@@ -1,39 +1,44 @@
 body { background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-#game-container { display: flex; gap: 30px; align-items: flex-start; }
-.player-section { display: flex; flex-direction: column; align-items: center; }
-.label { font-weight: bold; font-size: 14px; color: #444; margin-bottom: 5px; text-transform: uppercase; }
+#game-container { display: flex; gap: 30px; align-items: flex-start; position: relative; }
+.player-section { display: flex; flex-direction: column; align-items: center; position: relative; }
+.label { font-weight: bold; font-size: 12px; color: #444; margin-bottom: 5px; }
+
+/* 盤面の上に浮かぶスコアUI */
+#overlay-ui {
+    position: absolute;
+    top: 20px;
+    width: 200px;
+    z-index: 5; /* ミノ(10)より後ろ。ミノがUIの上を通過する */
+    display: flex;
+    justify-content: space-around;
+    pointer-events: none;
+    text-align: center;
+    text-shadow: 0 0 5px #000;
+}
+.stat { color: #888; font-weight: bold; }
+#score-display, #line-count { color: #fff; font-size: 20px; }
 
 #tetris { 
     background: #050505; 
     border: 2px solid #222; 
-    box-shadow: 0 0 20px rgba(255,255,255,0.05);
+    z-index: 10;
     transform-origin: center center;
-    transition: transform 0.08s ease-out;
+    transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     perspective: 1000px;
 }
 
-#hold-canvas, #next-canvas { background: #050505; border: 1px solid #222; border-radius: 4px; }
-#score-board { margin-bottom: 15px; font-family: 'Courier New', monospace; font-size: 16px; color: #888; }
+#hold-canvas, #next-canvas { background: #050505; border: 1px solid #222; }
 
-/* アニメーション */
-.anim-harddrop { animation: hd_bump 0.12s ease-out; }
-@keyframes hd_bump {
-    0% { transform: translateY(0); }
-    40% { transform: translateY(10px) scaleY(0.95); }
-    100% { transform: translateY(0); }
-}
+/* 特殊スピン：大きく傾き、少し拡大する */
+.anim-special-spin-l { transform: rotateZ(-5deg) rotateY(-10deg) scale(1.05) !important; }
+.anim-special-spin-r { transform: rotateZ(5deg) rotateY(10deg) scale(1.05) !important; }
 
-.anim-hit-left { animation: hit_l 0.1s; }
-@keyframes hit_l { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-5px); } }
-
-.anim-hit-right { animation: hit_r 0.1s; }
-@keyframes hit_r { 0%,100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
-
-.anim-spin-l { transform: rotateZ(-2deg) rotateY(-5deg) !important; }
-.anim-spin-r { transform: rotateZ(2deg) rotateY(5deg) !important; }
+/* 通常のアニメーション */
+.anim-harddrop { animation: hd 0.12s ease-out; }
+@keyframes hd { 0% { transform: translateY(0); } 40% { transform: translateY(10px); } 100% { transform: translateY(0); } }
+.anim-hit-left { animation: hl 0.1s; } @keyframes hl { 0%,100% { transform: translateX(0); } 50% { transform: translateX(-5px); } }
+.anim-hit-right { animation: hr 0.1s; } @keyframes hr { 0%,100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
 
 #game-over-screen { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:100; }
-.message { font-size: 48px; color: #f33; margin-bottom: 30px; }
-button { padding: 12px 30px; font-size: 18px; cursor: pointer; background: #222; color: #fff; border: 1px solid #444; transition: 0.2s; }
-button:hover { background: #fff; color: #000; }
-#room-setup { position: absolute; z-index: 50; }
+button { padding: 12px 30px; font-size: 18px; cursor: pointer; background: #222; color: #fff; border: 1px solid #444; }
+#room-setup { position: absolute; z-index: 110; }
