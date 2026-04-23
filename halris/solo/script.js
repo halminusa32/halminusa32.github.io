@@ -1,77 +1,52 @@
+const root = document.getElementById('game-root');
+root.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+        <div class="ui-text">HOLD</div>
+        <canvas id="hold-canvas" width="72" height="72"></canvas>
+    </div>
+    <div style="position:relative;">
+        <div class="ui-layer">
+            <div class="ui-text">SCORE</div><div id="score-display" class="ui-val">0</div>
+            <div style="margin-top:10px;" class="ui-text">LINES</div><div id="line-count" class="ui-val">0</div>
+        </div>
+        <canvas id="tetris" width="240" height="520"></canvas>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+        <div class="ui-text">NEXT</div>
+        <canvas id="next-canvas" width="72" height="200"></canvas>
+    </div>
+    <div id="game-over-screen">
+        <h1 style="color:#f33; font-size:48px;">GAME OVER</h1>
+        <button id="restart-button" style="padding:10px 20px; cursor:pointer;">RETRY</button>
+    </div>
+`;
+
 const canvas = document.getElementById('tetris'), ctx = canvas.getContext('2d');
 const hCanvas = document.getElementById('hold-canvas'), hCtx = hCanvas.getContext('2d');
 const nCanvas = document.getElementById('next-canvas'), nCtx = nCanvas.getContext('2d');
 
-const VISIBLE_ROWS = 22, TOTAL_ROWS = 40, COLS = 10, SIZE = 24; 
-const DISPLAY_START_ROW = 18; 
+const SIZE = 24, COLS = 10, TOTAL_ROWS = 40, DISPLAY_START = 18;
 const COLORS = { i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d', j:'#006eff', l:'#eeaa00' };
 const SHAPES = {
     i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]],
     s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]]
 };
-const SRS_KICKS = {
+const SRS = {
     "0->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]], "1->0": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]],
     "1->2": [[0,0], [ 1,0], [ 1,-1], [0, 2], [ 1, 2]], "2->1": [[0,0], [-1,0], [-1, 1], [0,-2], [-1,-2]],
     "2->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]], "3->2": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]],
     "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]], "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
 };
 
-let board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
-let current = null, gameOver = true, holdPiece = null, canHold = true, bag = [], nextQueue = [];
-let score = 0, totalLines = 0, level = 1, particles = []; 
-let keyStates = {}, moveTimers = {};
-let lockDelayTimer = null, lockResetCount = 0;
-const LOCK_DELAY_MS = 500, MAX_LOCK_RESETS = 15;
-let lastMoveWasRotate = false;
+let board, current, gameOver = true, holdPiece, canHold, bag, nextQueue, score, totalLines;
+let lockDelayTimer = null, lockResetCount = 0, rotationState = 0, lastMoveWasRotate = false;
 
-function triggerBoardAnim(cls) {
-    canvas.classList.remove('anim-harddrop', 'anim-hit-left', 'anim-hit-right', 'anim-special-spin-l', 'anim-special-spin-r');
-    void canvas.offsetWidth;
-    canvas.classList.add(cls);
-    if(!cls.includes('spin')) setTimeout(() => canvas.classList.remove(cls), 200);
-}
-
-function isGrounded() {
-    if (!current) return false;
-    return collide(board, { pos: { x: current.pos.x, y: current.pos.y + 1 }, shape: current.shape });
-}
-
-function getPieceOpacity() {
-    if (!isGrounded()) return 1.0;
-    // 接地中の猶予回数に応じて、1.0から0.3まで徐々に薄くする
-    return Math.max(0.3, 1.0 - (lockResetCount / MAX_LOCK_RESETS));
-}
-
-function checkSpecialSpin() {
-    if (!lastMoveWasRotate || !current) return false;
-    let corners = 0;
-    [{x:0,y:0},{x:2,y:0},{x:0,y:2},{x:2,y:2}].forEach(p => {
-        let nx = current.pos.x + p.x, ny = current.pos.y + p.y;
-        if (nx < 0 || nx >= COLS || ny >= TOTAL_ROWS || (ny >= 0 && board[ny][nx] !== null)) corners++;
-    });
-    return corners >= 3;
-}
-
-function resetLockDelay() {
-    if (lockDelayTimer && lockResetCount < MAX_LOCK_RESETS) {
-        clearTimeout(lockDelayTimer); lockDelayTimer = null; lockResetCount++;
-    }
-}
-
-function refillBag() {
-    let p = ['i','o','t','s','z','j','l'];
-    for(let i=p.length-1; i>0; i--) { let j=Math.floor(Math.random()*(i+1)); [p[i],p[j]]=[p[j],p[i]]; }
-    bag = [...p];
-}
-
-function updateNextQueue() { while(nextQueue.length < 5) { if(bag.length === 0) refillBag(); nextQueue.push(bag.pop()); } }
-
-function collide(b, p) {
-    for (let y=0; y<p.shape.length; y++) {
-        for (let x=0; x<p.shape[y].length; x++) {
-            if (p.shape[y][x]) {
-                let ny = p.pos.y + y, nx = p.pos.x + x;
-                if (ny >= TOTAL_ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx] !== null)) return true;
+function collide(b, p, ox=0, oy=0) {
+    for(let y=0; y<p.shape.length; y++) {
+        for(let x=0; x<p.shape[y].length; x++) {
+            if(p.shape[y][x]) {
+                let ny = p.pos.y + y + oy, nx = p.pos.x + x + ox;
+                if(ny >= TOTAL_ROWS || nx < 0 || nx >= COLS || (ny >= 0 && b[ny][nx])) return true;
             }
         }
     }
@@ -79,150 +54,149 @@ function collide(b, p) {
 }
 
 function spawn(type = null) {
-    lockResetCount = 0; lastMoveWasRotate = false;
-    if (lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
-    let t = type || nextQueue.shift(); updateNextQueue();
-    let nextP = { pos:{x: (t === 'o') ? 4 : 3, y: 18}, shape:SHAPES[t], type:t };
-    while (collide(board, nextP) && nextP.pos.y > 0) nextP.pos.y--;
-    if (collide(board, nextP)) { showGameOver(); return; }
-    current = nextP; drawNext(); drawHold();
-}
-
-function lockPiece() {
-    if (!current || gameOver) return;
-    current.shape.forEach((row, y) => row.forEach((val, x) => {
-        if (val) {
-            let ny = current.pos.y + y;
-            if (ny >= 0 && ny < TOTAL_ROWS) board[ny][current.pos.x + x] = COLORS[current.type];
-        }
-    }));
-    
-    let lines = [];
-    board.forEach((row, y) => { if (row.every(cell => cell !== null)) lines.push(y); });
-    if (lines.length > 0) {
-        playSound('clear');
-        lines.forEach(y => {
-            for(let x=0; x<COLS; x++) particles.push({x:x*SIZE+12, y:(y-DISPLAY_START_ROW)*SIZE+12, vx:(Math.random()-0.5)*10, vy:(Math.random()-5)*2, life:1, color:'#fff'});
-            board.splice(y, 1); board.unshift(Array(COLS).fill(null));
-        });
-        score += lines.length * 100 * level; totalLines += lines.length;
-        document.getElementById('score-display').innerText = score;
-        document.getElementById('line-count').innerText = totalLines;
-    } else playSound('lock');
-
-    canHold = true; spawn();
-}
-
-function drop() {
-    if(gameOver || !current) return;
-    current.pos.y++;
-    if(collide(board, current)) {
-        current.pos.y--;
-        if (!lockDelayTimer) lockDelayTimer = setTimeout(lockPiece, LOCK_DELAY_MS);
+    if(lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
+    lockResetCount = 0; rotationState = 0; lastMoveWasRotate = false;
+    if(nextQueue.length < 5) {
+        let b = ['i','o','t','s','z','j','l'].sort(() => Math.random()-0.5);
+        nextQueue.push(...b);
     }
+    let t = type || nextQueue.shift();
+    current = { pos: {x: 3, y: 17}, shape: SHAPES[t], type: t };
+    if(collide(board, current)) gameOver = true;
+    canHold = true;
+    drawSide();
 }
 
 function rotate(dir) {
     if(gameOver || !current) return;
-    const oldS = current.shape, oldP = {...current.pos}, oldR = rotationState;
-    if(dir === 1) current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse());
-    else current.shape = current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
+    const oldShape = current.shape;
+    const oldRS = rotationState;
+    current.shape = dir === 1 
+        ? current.shape[0].map((_, i) => current.shape.map(row => row[i]).reverse())
+        : current.shape[0].map((_, i) => current.shape.map(row => row[row.length-1-i]));
     rotationState = (rotationState + dir + 4) % 4;
-    let kicks = SRS_KICKS[`${oldR}->${rotationState}`] || [[0,0]];
-    if(!kicks.some(k => { current.pos.x = oldP.x + k[0]; current.pos.y = oldP.y - k[1]; return !collide(board, current); })) {
-        current.shape = oldS; current.pos = oldP; rotationState = oldR;
+
+    const kicks = SRS[`${oldRS}->${rotationState}`] || [[0,0]];
+    let success = false;
+    for(let k of kicks) {
+        if(!collide(board, current, k[0], -k[1])) {
+            current.pos.x += k[0]; current.pos.y -= k[1];
+            success = true; break;
+        }
+    }
+
+    if(!success) {
+        current.shape = oldShape; rotationState = oldRS;
     } else {
-        playSound('rotate'); lastMoveWasRotate = true; resetLockDelay();
-        if (checkSpecialSpin()) triggerBoardAnim(dir === 1 ? 'anim-special-spin-r' : 'anim-special-spin-l');
+        lastMoveWasRotate = true;
+        if(lockDelayTimer && lockResetCount < 15) { clearTimeout(lockDelayTimer); lockDelayTimer = null; lockResetCount++; }
+        if(checkSpin()) {
+            canvas.classList.remove('anim-special-spin-l', 'anim-special-spin-r');
+            void canvas.offsetWidth;
+            canvas.classList.add(dir === 1 ? 'anim-special-spin-r' : 'anim-special-spin-l');
+        }
     }
 }
 
-function move(dir) {
+function checkSpin() {
+    if(!lastMoveWasRotate) return false;
+    let corners = 0;
+    [{x:0,y:0},{x:2,y:0},{x:0,y:2},{x:2,y:2}].forEach(p => {
+        let nx = current.pos.x + p.x, ny = current.pos.y + p.y;
+        if(nx < 0 || nx >= COLS || ny >= TOTAL_ROWS || (ny >= 0 && board[ny][nx])) corners++;
+    });
+    return corners >= 3;
+}
+
+function drop() {
     if(gameOver || !current) return;
-    current.pos.x += dir;
-    if(collide(board, current)) { 
-        current.pos.x -= dir; triggerBoardAnim(dir < 0 ? 'anim-hit-left' : 'anim-hit-right'); return false; 
+    if(!collide(board, current, 0, 1)) {
+        current.pos.y++;
+        if(lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
+    } else {
+        if(!lockDelayTimer) lockDelayTimer = setTimeout(lockPiece, 500);
     }
-    playSound('move'); lastMoveWasRotate = false; resetLockDelay(); return true;
 }
 
-function startAutoMove(key, action, interval = 30) {
-    if (moveTimers[key]) return;
-    action(); moveTimers[key] = { timeout: setTimeout(() => { moveTimers[key].interval = setInterval(action, interval); }, 150) };
+function lockPiece() {
+    current.shape.forEach((row, y) => row.forEach((v, x) => {
+        if(v) { let ny = current.pos.y + y; if(ny >= 0) board[ny][current.pos.x + x] = COLORS[current.type]; }
+    }));
+    let lines = 0;
+    board = board.filter(row => { if(row.every(c => c !== null)) { lines++; return false; } return true; });
+    while(board.length < TOTAL_ROWS) board.unshift(Array(COLS).fill(null));
+    score += lines * 100; totalLines += lines;
+    document.getElementById('score-display').innerText = score;
+    document.getElementById('line-count').innerText = totalLines;
+    spawn();
 }
-function stopAutoMove(key) { if (moveTimers[key]) { clearTimeout(moveTimers[key].timeout); clearInterval(moveTimers[key].interval); delete moveTimers[key]; } }
 
-function drawBlock(c, x, y, color, op = 1, sz = SIZE) { c.globalAlpha = op; c.fillStyle = color; c.fillRect(x*sz, y*sz, sz-1, sz-1); c.globalAlpha = 1; }
+function drawSide() {
+    hCtx.clearRect(0,0,72,72); if(holdPiece) {
+        SHAPES[holdPiece].forEach((row, y) => row.forEach((v, x) => {
+            if(v) { hCtx.fillStyle = COLORS[holdPiece]; hCtx.fillRect(x*15+10, y*15+10, 14, 14); }
+        }));
+    }
+    nCtx.clearRect(0,0,72,200); nextQueue.slice(0, 4).forEach((t, i) => {
+        SHAPES[t].forEach((row, y) => row.forEach((v, x) => {
+            if(v) { nCtx.fillStyle = COLORS[t]; nCtx.fillRect(x*12+10, y*12 + i*45 + 10, 11, 11); }
+        }));
+    });
+}
 
 function update() {
-    if (gameOver) return;
-    if (isGrounded() && !lockDelayTimer) lockDelayTimer = setTimeout(lockPiece, LOCK_DELAY_MS);
-    if (!isGrounded() && lockDelayTimer) { clearTimeout(lockDelayTimer); lockDelayTimer = null; }
-
+    if(gameOver) { document.getElementById('game-over-screen').style.display = 'flex'; return; }
     ctx.fillStyle = '#050505'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    board.forEach((row, y) => row.forEach((color, x) => {
-        if(color && y >= DISPLAY_START_ROW) drawBlock(ctx, x, y-DISPLAY_START_ROW, color, y<20 ? 0.3 : 1);
+    board.forEach((row, y) => row.forEach((c, x) => {
+        if(c && y >= DISPLAY_START) {
+            ctx.globalAlpha = y < 20 ? 0.3 : 1; ctx.fillStyle = c;
+            ctx.fillRect(x*SIZE, (y-DISPLAY_START)*SIZE, SIZE-1, SIZE-1);
+        }
     }));
     if(current) {
-        let op = getPieceOpacity();
-        let g = {...current.pos}; while(!collide(board, {pos:{x:g.x, y:g.y+1}, shape:current.shape})) g.y++;
+        let op = lockDelayTimer ? 0.4 : 1.0;
+        ctx.fillStyle = COLORS[current.type];
         current.shape.forEach((row, y) => row.forEach((v, x) => {
             if(v) {
-                let dy = g.y+y-DISPLAY_START_ROW; if(dy>=0) drawBlock(ctx, g.x+x, dy, COLORS[current.type], 0.1);
-                let cy = current.pos.y+y-DISPLAY_START_ROW; 
-                if(cy>=0) drawBlock(ctx, current.pos.x+x, cy, COLORS[current.type], (current.pos.y+y<20 ? 0.4 : 1) * op);
+                let cy = current.pos.y + y;
+                if(cy >= DISPLAY_START) {
+                    ctx.globalAlpha = (cy < 20 ? 0.4 : 1.0) * op;
+                    ctx.fillRect((current.pos.x+x)*SIZE, (cy-DISPLAY_START)*SIZE, SIZE-1, SIZE-1);
+                }
             }
         }));
     }
-    particles.forEach((p, i) => {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life -= 0.02;
-        if(p.life <= 0) particles.splice(i, 1);
-        else { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); }
-    });
     requestAnimationFrame(update);
 }
 
-function drawHold() {
-    hCtx.clearRect(0,0,60,60); if(!holdPiece) return;
-    SHAPES[holdPiece].forEach((row, y) => row.forEach((v, x) => { if(v) drawBlock(hCtx, x+1, y+1, COLORS[holdPiece], 1, 12); }));
-}
-function drawNext() {
-    nCtx.clearRect(0,0,60,220);
-    nextQueue.forEach((t, i) => {
-        SHAPES[t].forEach((row, y) => row.forEach((v, x) => { if(v) drawBlock(nCtx, x+1, y + 1 + i*4, COLORS[t], 1, 10); }));
-    });
-}
-
-const SOUND_FILES = { move: 'https://halminusa32.github.io/halris/solo/move.mp3', rotate: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', clear: 'https://halminusa32.github.io/halris/solo/solian-te-n1.mp3', lock: 'https://actions.google.com/sounds/v1/foley/button_click.ogg', hold: 'https://actions.google.com/sounds/v1/foley/camera_shutter.ogg' };
-let audioCtx = null, audioBuffers = {};
-function initAudio() { if(audioCtx) return; audioCtx = new AudioContext(); Object.keys(SOUND_FILES).forEach(n => fetch(SOUND_FILES[n]).then(r => r.arrayBuffer()).then(d => audioCtx.decodeAudioData(d)).then(b => audioBuffers[n] = b)); }
-function playSound(n) { if(audioBuffers[n]) { let s = audioCtx.createBufferSource(); s.buffer = audioBuffers[n]; s.connect(audioCtx.destination); s.start(0); } }
-
-function showGameOver() { gameOver = true; document.getElementById('game-over-screen').style.display = 'flex'; }
-function resetGame() {
-    initAudio(); board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
-    score = 0; totalLines = 0; gameOver = false; holdPiece = null; canHold = true; bag = []; nextQueue = []; particles = [];
+function initGame() {
+    board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
+    nextQueue = []; holdPiece = null; score = 0; totalLines = 0;
+    gameOver = false; document.getElementById('game-root').style.visibility = 'visible';
     document.getElementById('room-setup').style.display = 'none';
     document.getElementById('game-over-screen').style.display = 'none';
-    refillBag(); updateNextQueue(); spawn(); update();
-    setInterval(() => { if(!gameOver && !isGrounded()) drop(); }, 1000);
+    spawn(); update();
+    setInterval(() => { if(!gameOver) drop(); }, 1000);
 }
 
-document.getElementById('play').onclick = resetGame;
-document.getElementById('restart-button').onclick = resetGame;
+document.getElementById('play').onclick = initGame;
+document.getElementById('restart-button').onclick = initGame;
 
 window.addEventListener('keydown', e => {
-    let k = e.key.toLowerCase(); if(keyStates[k] || gameOver) return; keyStates[k] = true;
-    if(k === 'arrowleft') startAutoMove('l', () => move(-1));
-    if(k === 'arrowright') startAutoMove('r', () => move(1));
-    if(k === 'arrowdown') startAutoMove('d', drop, 50);
+    const k = e.key.toLowerCase(); if(gameOver) return;
+    if(k === 'arrowleft' && !collide(board, current, -1, 0)) { current.pos.x--; lastMoveWasRotate=false; if(lockDelayTimer && lockResetCount < 15) { clearTimeout(lockDelayTimer); lockDelayTimer=null; lockResetCount++; } }
+    if(k === 'arrowright' && !collide(board, current, 1, 0)) { current.pos.x++; lastMoveWasRotate=false; if(lockDelayTimer && lockResetCount < 15) { clearTimeout(lockDelayTimer); lockDelayTimer=null; lockResetCount++; } }
+    if(k === 'arrowdown') drop();
     if(k === 'arrowup' || k === 'x') rotate(1);
     if(k === 'z') rotate(-1);
-    if(k === ' ') { while(!collide(board,{pos:{x:current.pos.x,y:current.pos.y+1},shape:current.shape})) current.pos.y++; triggerBoardAnim('anim-harddrop'); lockPiece(); }
-    if(k === 'c' || k === 'shift') { if(canHold && current) { let t = holdPiece; holdPiece = current.type; canHold = false; spawn(t); playSound('hold'); } }
-});
-window.addEventListener('keyup', e => {
-    let k = e.key.toLowerCase(); keyStates[k] = false;
-    if(k === 'arrowleft') stopAutoMove('l'); if(k === 'arrowright') stopAutoMove('r'); if(k === 'arrowdown') stopAutoMove('d');
-    if(k === 'arrowup' || k === 'x' || k === 'z') canvas.classList.remove('anim-special-spin-l', 'anim-special-spin-r');
+    if(k === 'c' || k === 'shift') {
+        if(canHold) {
+            let old = holdPiece; holdPiece = current.type; spawn(old); canHold = false;
+        }
+    }
+    if(k === ' ') {
+        while(!collide(board, current, 0, 1)) current.pos.y++;
+        canvas.classList.remove('anim-harddrop'); void canvas.offsetWidth; canvas.classList.add('anim-harddrop');
+        lockPiece();
+    }
 });
