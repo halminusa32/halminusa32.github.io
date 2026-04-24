@@ -55,7 +55,7 @@ let comboCount = -1, isBackToBack = false;
 
 let clearingLines = []; 
 let clearAnimTimer = 0;
-const CLEAR_ANIM_DURATION = 12; 
+const CLEAR_ANIM_DURATION = 0; 
 
 let level = 1;
 const MAX_LEVEL = 15; 
