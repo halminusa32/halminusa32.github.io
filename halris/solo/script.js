@@ -1,65 +1,54 @@
 (function() {
-    /**
-     * 1. 仮想CSSファイルの生成と注入
-     * 外部CSSファイルを用意する手間を省き、JSから直接ヘッドへ送り込みます。
-     */
+    // 1. スタイルの注入（ボタンを最前面に、Canvasを中央に固定）
     const css = `
-        body { 
-            margin: 0; 
-            background: #000; 
-            color: #fff; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            overflow: hidden; 
+        body { margin: 0; background: #000; color: #fff; font-family: monospace; overflow: hidden; }
+        #halris-root { 
+            position: relative; 
+            width: 100vw; 
+            height: 100vh; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            height: 100vh; 
         }
         canvas { 
             background: #050505; 
-            border: 2px solid #222; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 2px solid #333; 
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
             transform-origin: center center;
-            transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1.2); 
-        }
-        /* 特殊スピン時の画面傾斜演出 */
-        .spin-l { transform: rotateZ(-6deg) scale(1.03) !important; }
-        .spin-r { transform: rotateZ(6deg) scale(1.03) !important; }
-        /* ハードドロップ時の衝撃 */
-        .drop-anim { animation: bump 0.08s ease-out; }
-        @keyframes bump { 
-            0%, 100% { transform: translateY(0); } 
-            50% { transform: translateY(10px); } 
+            transition: transform 0.1s cubic-bezier(0.1, 0.9, 0.2, 1.2);
+            z-index: 1;
         }
         #start-btn { 
             position: absolute; 
-            padding: 15px 40px; 
-            font-size: 18px; 
+            z-index: 100; /* 確実に手前に持ってくる */
+            padding: 20px 40px; 
+            font-size: 20px; 
             background: #111; 
-            color: #eee; 
-            border: 1px solid #444; 
+            color: #0f0; 
+            border: 2px solid #0f0; 
             cursor: pointer; 
-            letter-spacing: 2px;
-            transition: 0.2s;
+            font-family: inherit;
+            text-shadow: 0 0 5px #0f0;
+            box-shadow: 0 0 10px #0f0;
         }
-        #start-btn:hover { background: #222; border-color: #666; }
+        #start-btn:hover { background: #0f0; color: #000; }
+        .spin-l { transform: rotateZ(-6deg) scale(1.05) !important; }
+        .spin-r { transform: rotateZ(6deg) scale(1.05) !important; }
+        .drop-anim { animation: bump 0.08s ease-out; }
+        @keyframes bump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
     `;
     const styleTag = document.createElement('style');
     styleTag.textContent = css;
     document.head.appendChild(styleTag);
 
-    // 2. DOM構築
-    const root = document.getElementById('halris-root');
-    root.style.position = 'relative';
-    root.innerHTML = `
-        <canvas id="t"></canvas>
-        <button id="start-btn">INITIALIZE HALRIS</button>
-    `;
+    // 2. 構造の作成
+    const root = document.getElementById('halris-root') || document.body;
+    root.innerHTML = `<canvas id="t"></canvas><button id="start-btn">INITIALIZE HALRIS</button>`;
 
     const canvas = document.getElementById('t'), ctx = canvas.getContext('2d');
     const btn = document.getElementById('start-btn');
 
-    // 3. ゲーム設定
+    // ゲーム定数
     const SIZE = 24, COLS = 10, TOTAL_ROWS = 40, DISPLAY_START = 18;
     const BOARD_W = COLS * SIZE, UI_W = 120;
     canvas.width = BOARD_W + UI_W * 2; 
@@ -77,10 +66,9 @@
         "3->0": [[0,0], [-1,0], [-1,-1], [0, 2], [-1, 2]], "0->3": [[0,0], [ 1,0], [ 1, 1], [0,-2], [ 1,-2]]
     };
 
-    let board, current, hold=null, next=[], bag=[], score=0, lines=0, gameOver=true;
+    let board, current, hold=null, next=[], bag=[], score=0, lines=0, gameOver=true, tickInterval;
     let lockTimer=null, resets=0, rot=0, wasRot=false, canHold=true;
 
-    // 4. ロジック
     function collide(b, p, ox=0, oy=0) {
         return p.shape.some((row, y) => row.some((v, x) => {
             if (!v) return false;
@@ -109,17 +97,8 @@
             current.shape = oldS; rot = oldR;
         } else {
             wasRot = true; if(lockTimer && resets < 15) { clearTimeout(lockTimer); lockTimer = null; resets++; }
-            if(checkSpin()) { canvas.className = ''; void canvas.offsetWidth; canvas.className = dir === 1 ? 'spin-r' : 'spin-l'; }
+            canvas.className = ''; void canvas.offsetWidth; canvas.className = dir === 1 ? 'spin-r' : 'spin-l';
         }
-    }
-
-    function checkSpin() {
-        if(!wasRot || current.type !== 't') return false;
-        let c = 0; [{x:0,y:0},{x:2,y:0},{x:0,y:2},{x:2,y:2}].forEach(p => {
-            let nx = current.pos.x+p.x, ny = current.pos.y+p.y;
-            if(nx < 0 || nx >= COLS || ny >= TOTAL_ROWS || (ny >= 0 && board[ny][nx])) c++;
-        });
-        return c >= 3;
     }
 
     function drop() {
@@ -137,51 +116,41 @@
         score += clr * 100; lines += clr; spawn();
     }
 
-    // 5. 描画
-    function drawBlock(x, y, color, alpha = 1, size = SIZE) {
-        ctx.globalAlpha = alpha; ctx.fillStyle = color;
-        ctx.fillRect(UI_W + x * size, y * size, size - 1, size - 1);
-    }
-
     function render() {
         if(gameOver) { btn.style.display = 'block'; return; }
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // サイドUI描画
-        ctx.globalAlpha = 1; ctx.fillStyle = '#555'; ctx.font = 'bold 13px monospace';
+        ctx.globalAlpha = 1; ctx.fillStyle = '#555'; ctx.font = 'bold 12px monospace';
         ctx.fillText('HOLD', 45, 30); ctx.fillText('NEXT', BOARD_W + UI_W + 45, 30);
         ctx.fillStyle = '#aaa';
-        ctx.fillText(`SCORE`, 20, canvas.height - 60);
-        ctx.fillText(score.toString().padStart(7, '0'), 20, canvas.height - 45);
-        ctx.fillText(`LINES`, 20, canvas.height - 25);
-        ctx.fillText(lines.toString().padStart(4, '0'), 20, canvas.height - 10);
+        ctx.fillText(`SCORE: ${score.toString().padStart(6, '0')}`, 15, canvas.height - 40);
+        ctx.fillText(`LINES: ${lines.toString().padStart(4, '0')}`, 15, canvas.height - 20);
 
         if(hold) SHAPES[hold].forEach((row, y) => row.forEach((v, x) => { if(v) { ctx.fillStyle = COLORS[hold]; ctx.fillRect(x*14 + 40, y*14 + 45, 13, 13); } }));
         next.slice(0, 3).forEach((t, i) => SHAPES[t].forEach((row, y) => row.forEach((v, x) => { if(v) { ctx.fillStyle = COLORS[t]; ctx.fillRect(BOARD_W + UI_W + 40 + x*12, y*12 + 45 + i*50, 11, 11); } })));
 
-        // 盤面描画 (隠し領域透過)
-        board.forEach((row, y) => row.forEach((c, x) => { if(c && y >= DISPLAY_START) drawBlock(x, y-DISPLAY_START, c, y < 20 ? 0.25 : 1); }));
+        board.forEach((row, y) => row.forEach((c, x) => { if(c && y >= DISPLAY_START) { ctx.globalAlpha = y < 20 ? 0.25 : 1; ctx.fillStyle = c; ctx.fillRect(UI_W + x * SIZE, (y-DISPLAY_START) * SIZE, SIZE - 1, SIZE - 1); } }));
 
         if(current) {
-            let ghostY = current.pos.y; while(!collide(board, current, 0, ghostY - current.pos.y + 1)) ghostY++;
+            let gy = current.pos.y; while(!collide(board, current, 0, gy - current.pos.y + 1)) gy++;
             current.shape.forEach((row, y) => row.forEach((v, x) => {
                 if(!v) return;
-                if(ghostY+y >= DISPLAY_START) drawBlock(current.pos.x+x, ghostY+y-DISPLAY_START, COLORS[current.type], 0.1); // ゴースト
+                if(gy+y >= DISPLAY_START) { ctx.globalAlpha = 0.1; ctx.fillStyle = COLORS[current.type]; ctx.fillRect(UI_W + (current.pos.x+x) * SIZE, (gy+y-DISPLAY_START) * SIZE, SIZE - 1, SIZE - 1); }
                 if(current.pos.y+y >= DISPLAY_START) {
-                    let op = (current.pos.y+y < 20 ? 0.35 : 1) * (lockTimer ? 0.4 : 1); 
-                    drawBlock(current.pos.x+x, current.pos.y+y-DISPLAY_START, COLORS[current.type], op);
+                    ctx.globalAlpha = (current.pos.y+y < 20 ? 0.35 : 1) * (lockTimer ? 0.5 : 1);
+                    ctx.fillStyle = COLORS[current.type]; ctx.fillRect(UI_W + (current.pos.x+x) * SIZE, (current.pos.y+y-DISPLAY_START) * SIZE, SIZE - 1, SIZE - 1);
                 }
             }));
         }
         requestAnimationFrame(render);
     }
 
-    // 6. エントリ
     btn.onclick = () => {
         board = Array.from({length: TOTAL_ROWS}, () => Array(COLS).fill(null));
         score = 0; lines = 0; next = []; bag = []; hold = null; gameOver = false;
         btn.style.display = 'none'; spawn(); render();
-        const tick = setInterval(() => { if(gameOver) clearInterval(tick); else drop(); }, 800);
+        if(tickInterval) clearInterval(tickInterval);
+        tickInterval = setInterval(() => { if(!gameOver) drop(); }, 800);
     };
 
     window.onkeydown = e => {
@@ -192,10 +161,7 @@
         if(k === 'arrowdown') drop();
         if(k === 'arrowup' || k === 'x') rotate(1);
         if(k === 'z') rotate(-1);
-        if(k === ' ') { 
-            while(!collide(board, current, 0, 1)) current.pos.y++; 
-            canvas.classList.remove('drop-anim'); void canvas.offsetWidth; canvas.classList.add('drop-anim'); lock(); 
-        }
+        if(k === ' ') { while(!collide(board, current, 0, 1)) current.pos.y++; canvas.classList.remove('drop-anim'); void canvas.offsetWidth; canvas.classList.add('drop-anim'); lock(); }
         if(k === 'c' || k === 'shift') { if(canHold) { let t = hold; hold = current.type; spawn(t); canHold = false; } }
     };
     window.onkeyup = e => { if(['arrowup', 'x', 'z'].includes(e.key.toLowerCase())) canvas.className = ''; };
