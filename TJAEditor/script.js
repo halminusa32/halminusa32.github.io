@@ -4,6 +4,7 @@ const editor = document.getElementById('editor');
 const playBtn = document.getElementById('playBtn');
 const gridSnap = document.getElementById('gridSnap');
 const audioInput = document.getElementById('audioFile');
+const loadingMsg = document.getElementById('loadingMsg');
 
 canvas.width = 1000; canvas.height = 180;
 const bpm = 120;
@@ -14,27 +15,20 @@ let scoreNotes = [];
 let audioCtx, audioBuffer, sourceNode;
 let startTime = 0, pausedAt = 0, isPlaying = false;
 
-// --- キーコンフィグ関連 ---
-let keyConfig = {
-    don_l: "d", don_r: "j",
-    ka_l: "f", ka_r: "k"
+// --- キーコンフィグ ---
+let keyConfig = JSON.parse(localStorage.getItem('tjaKeyConfig')) || {
+    don_l: "d", don_r: "j", ka_l: "f", ka_r: "k"
 };
-
-// LocalStorageから読み込み
-const savedConfig = localStorage.getItem('tjaKeyConfig');
-if (savedConfig) {
-    keyConfig = JSON.parse(savedConfig);
-    updateKeyUI();
-}
+updateKeyUI();
 
 function updateKeyUI() {
-    document.getElementById('key_don_l').innerText = keyConfig.don_l.toUpperCase();
-    document.getElementById('key_don_r').innerText = keyConfig.don_r.toUpperCase();
-    document.getElementById('key_ka_l').innerText = keyConfig.ka_l.toUpperCase();
-    document.getElementById('key_ka_r').innerText = keyConfig.ka_r.toUpperCase();
+    ['don_l', 'don_r', 'ka_l', 'ka_r'].forEach(id => {
+        const btn = document.getElementById(`key_${id}`);
+        if(btn) btn.innerText = keyConfig[id].toUpperCase();
+    });
 }
 
-// キー設定モーダル開閉
+// モーダル処理
 const modal = document.getElementById('configModal');
 document.getElementById('openConfig').onclick = () => modal.style.display = "block";
 document.getElementById('closeConfig').onclick = () => {
@@ -42,7 +36,6 @@ document.getElementById('closeConfig').onclick = () => {
     localStorage.setItem('tjaKeyConfig', JSON.stringify(keyConfig));
 };
 
-// キー設定ロジック
 document.querySelectorAll('.key-setter').forEach(btn => {
     btn.onclick = () => {
         btn.innerText = "...";
@@ -56,49 +49,35 @@ document.querySelectorAll('.key-setter').forEach(btn => {
     };
 });
 
-// --- キー入力検知 (テストプレイ & 録音) ---
-window.addEventListener('keydown', (e) => {
-    if (modal.style.display === "block") return; // 設定中は無視
-    if (e.target === editor) return; // エディタ入力中は無視
-
-    const key = e.key.toLowerCase();
-    let type = null;
-
-    if (key === keyConfig.don_l || key === keyConfig.don_r) type = "1";
-    if (key === keyConfig.ka_l || key === keyConfig.ka_r) type = "2";
-
-    if (type && audioBuffer) {
-        // 現在の再生時間にノーツを置く
-        const currentTime = isPlaying ? audioCtx.currentTime - startTime : pausedAt;
-        addNoteAtTime(currentTime, type);
-    }
-});
-
-function addNoteAtTime(time, type) {
-    const division = parseInt(gridSnap.value);
-    const secPerMeasure = 60 / bpm * 4;
-    const secPerDiv = secPerMeasure / division;
-    const snappedTime = Math.round(time / secPerDiv) * secPerDiv;
-
-    // 重複確認
-    const existingIndex = scoreNotes.findIndex(n => Math.abs(n.time - snappedTime) < 0.005);
-    if (existingIndex !== -1) scoreNotes.splice(existingIndex, 1);
-    
-    scoreNotes.push({ time: snappedTime, type: type });
-    scoreNotes.sort((a, b) => a.time - b.time);
-    updateEditorText();
-}
-
-// --- 描画とデータ更新 (前回分を継承) ---
+// --- オーディオ読み込み (OGG対応強化) ---
 audioInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const arrayBuffer = await file.arrayBuffer();
-    audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    playBtn.disabled = false;
+
+    loadingMsg.style.display = "block";
+    playBtn.disabled = true;
+    playBtn.innerText = "読み込み中...";
+
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const arrayBuffer = await file.arrayBuffer();
+        // decodeAudioData はブラウザが対応していれば OGG を自動判別して解凍します
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        playBtn.disabled = false;
+        playBtn.innerText = "再生 / 停止";
+        pausedAt = 0;
+    } catch (err) {
+        console.error("Audio Decode Error:", err);
+        alert("ファイルの読み込みに失敗しました。対応していない形式か、ファイルが破損している可能性があります。");
+        playBtn.innerText = "エラー";
+    } finally {
+        loadingMsg.style.display = "none";
+    }
 });
 
+// --- 再生ロジック ---
 playBtn.addEventListener('click', () => {
     if (isPlaying) {
         sourceNode.stop();
@@ -111,6 +90,32 @@ playBtn.addEventListener('click', () => {
         startTime = audioCtx.currentTime - pausedAt;
         sourceNode.start(0, pausedAt);
         isPlaying = true;
+        // ループ終了検知
+        sourceNode.onended = () => { if(isPlaying) { isPlaying = false; pausedAt = 0; } };
+    }
+});
+
+// --- キー入力 & ノーツ配置 ---
+window.addEventListener('keydown', (e) => {
+    if (modal.style.display === "block" || e.target === editor) return;
+    const key = e.key.toLowerCase();
+    let type = null;
+    if (key === keyConfig.don_l || key === keyConfig.don_r) type = "1";
+    if (key === keyConfig.ka_l || key === keyConfig.ka_r) type = "2";
+
+    if (type && audioBuffer) {
+        const currentTime = isPlaying ? audioCtx.currentTime - startTime : pausedAt;
+        const division = parseInt(gridSnap.value);
+        const secPerMeasure = 60 / bpm * 4;
+        const secPerDiv = secPerMeasure / division;
+        const snappedTime = Math.round(currentTime / secPerDiv) * secPerDiv;
+
+        const existingIdx = scoreNotes.findIndex(n => Math.abs(n.time - snappedTime) < 0.005);
+        if (existingIdx !== -1) scoreNotes.splice(existingIdx, 1);
+        
+        scoreNotes.push({ time: snappedTime, type: type });
+        scoreNotes.sort((a, b) => a.time - b.time);
+        updateEditorText();
     }
 });
 
@@ -120,22 +125,39 @@ function updateEditorText() {
     editor.value = text;
 }
 
+// --- 描画ループ ---
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#222'; ctx.fillRect(0, 40, canvas.width, 100);
-    let currentTime = isPlaying ? audioCtx.currentTime - startTime : pausedAt;
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 40, canvas.width, 100);
     
+    let currentTime = isPlaying ? audioCtx.currentTime - startTime : pausedAt;
+
     // 判定枠
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(judgeX, 90, 35, 0, Math.PI * 2); ctx.stroke();
+
+    if (audioBuffer) document.getElementById('timeDisplay').innerText = `${currentTime.toFixed(2)} / ${audioBuffer.duration.toFixed(2)}`;
 
     scoreNotes.forEach(note => {
         const x = judgeX + (note.time - currentTime) * baseScroll;
         if (x > -50 && x < canvas.width + 100) {
             ctx.fillStyle = (note.type === '1') ? '#ff4444' : '#44ccff';
             ctx.beginPath(); ctx.arc(x, 90, 25, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
         }
     });
     requestAnimationFrame(draw);
 }
+
+// ノーツタイプ切り替えUI
+document.querySelectorAll('.note-type').forEach(label => {
+    label.addEventListener('click', () => {
+        document.querySelectorAll('.note-type').forEach(l => l.classList.remove('active'));
+        label.classList.add('active');
+        label.querySelector('input').checked = true;
+    });
+});
+
+document.getElementById('clearNotes').onclick = () => { scoreNotes = []; updateEditorText(); };
+
 draw();
