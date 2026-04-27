@@ -2,15 +2,15 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>TJA Web Editor - Key Config Edition</title>
+    <title>TJA Web Editor - OGG Supported</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header>
         <div class="header-content">
-            <h1>TJA Web Editor <span class="badge">Test Play & KeyConfig</span></h1>
+            <h1>TJA Web Editor <span class="badge">OGG Ready</span></h1>
             <div class="top-controls">
-                <label class="file-label">🎵 音楽読込<input type="file" id="audioFile" accept="audio/*"></label>
+                <label class="file-label">🎵 音楽読込 (.ogg/.mp3)<input type="file" id="audioFile" accept="audio/ogg, audio/wav, audio/mpeg"></label>
                 <button id="openConfig" class="mini-btn">⌨️ キー設定</button>
             </div>
         </div>
@@ -19,7 +19,6 @@
     <div id="configModal" class="modal">
         <div class="modal-content">
             <h3>キーコンフィグ設定</h3>
-            <p>各ボタンをクリックしてから、割り当てたいキーを押してください。</p>
             <div class="key-grid">
                 <div class="key-item">左カッ: <button id="key_ka_l" class="key-setter">F</button></div>
                 <div class="key-item">左ドン: <button id="key_don_l" class="key-setter">D</button></div>
@@ -51,11 +50,9 @@
                         <label class="note-type blue"><input type="radio" name="noteType" value="2"> カッ</label>
                     </div>
                 </div>
-                <div class="control-group right">
-                    <button id="clearNotes" class="mini-btn danger">全消去</button>
-                </div>
+                <button id="clearNotes" class="mini-btn danger" style="margin-left:auto;">全消去</button>
             </div>
-            <textarea id="editor" spellcheck="false">// 譜面データ (クリックまたはキー入力で反映)</textarea>
+            <textarea id="editor" spellcheck="false">// 譜面データ</textarea>
         </section>
 
         <section class="preview-section">
@@ -65,6 +62,7 @@
             <div class="playback-ui">
                 <button id="playBtn" class="btn" disabled>音楽を選択</button>
                 <div class="time-info"><span id="timeDisplay">0.00 / 0.00</span></div>
+                <div id="loadingMsg" style="color: #ff4500; font-size: 0.8rem; display: none;">Decoding...</div>
             </div>
         </section>
     </main>
