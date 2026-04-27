@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TJA Web Editor - Key Config Edition</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>TJA Web Editor <span class="badge">Test Play & KeyConfig</span></h1>
+            <div class="top-controls">
+                <label class="file-label">🎵 音楽読込<input type="file" id="audioFile" accept="audio/*"></label>
+                <button id="openConfig" class="mini-btn">⌨️ キー設定</button>
+            </div>
+        </div>
+    </header>
+
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <h3>キーコンフィグ設定</h3>
+            <p>各ボタンをクリックしてから、割り当てたいキーを押してください。</p>
+            <div class="key-grid">
+                <div class="key-item">左カッ: <button id="key_ka_l" class="key-setter">F</button></div>
+                <div class="key-item">左ドン: <button id="key_don_l" class="key-setter">D</button></div>
+                <div class="key-item">右ドン: <button id="key_don_r" class="key-setter">J</button></div>
+                <div class="key-item">右カッ: <button id="key_ka_r" class="key-setter">K</button></div>
+            </div>
+            <button id="closeConfig" class="btn" style="margin-top:20px;">保存して閉じる</button>
+        </div>
+    </div>
+
+    <main id="container">
+        <section class="editor-section">
+            <div class="ui-panel">
+                <div class="control-group">
+                    <label>Grid:</label>
+                    <select id="gridSnap">
+                        <option value="16">16分</option>
+                        <option value="32">32分</option>
+                        <option value="64">64分</option>
+                        <option value="128">128分</option>
+                        <option value="12">12分</option>
+                        <option value="24">24分</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Note:</label>
+                    <div class="radio-group">
+                        <label class="note-type red active"><input type="radio" name="noteType" value="1" checked> ドン</label>
+                        <label class="note-type blue"><input type="radio" name="noteType" value="2"> カッ</label>
+                    </div>
+                </div>
+                <div class="control-group right">
+                    <button id="clearNotes" class="mini-btn danger">全消去</button>
+                </div>
+            </div>
+            <textarea id="editor" spellcheck="false">// 譜面データ (クリックまたはキー入力で反映)</textarea>
+        </section>
+
+        <section class="preview-section">
+            <div class="canvas-wrapper">
+                <canvas id="tjaCanvas"></canvas>
+            </div>
+            <div class="playback-ui">
+                <button id="playBtn" class="btn" disabled>音楽を選択</button>
+                <div class="time-info"><span id="timeDisplay">0.00 / 0.00</span></div>
+            </div>
+        </section>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
