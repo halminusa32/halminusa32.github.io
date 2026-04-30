@@ -3,29 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HALRIS SOLO - PERFECT Edition</title>
+    <title>HALRIS SOLO - CUSTOM Edition</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="side-info">
         <h1>HALRIS SOLO<br>はるリス ソロ</h1>
         <p>O-Spin→I / S/Z-Spin→O<br>
-           S/Z-O-Spin→I<br>
-           O-Spin: 5% GotsuGotsu O-Spin</p>
+           S/Z-O-Spin→I</p>
         
         <div class="line-container">
             <div class="label">SCORE</div>
             <div id="score-display">0</div>
+            
             <div class="label" style="margin-top:10px;">LINES</div>
             <div id="line-count">0</div>
-            <div class="label" style="margin-top:10px;">LEVEL</div>
+            
+            <div class="label" style="margin-top:10px; position: relative;">
+                LEVEL
+                <div id="level-up-text">LEVEL UP!</div>
+            </div>
             <div id="level">1</div>
+
+            <div class="label" style="margin-top:20px; color: #ff3333;">LINE CLEAR DELAY (F)</div>
+            <div class="delay-control-group">
+                <input type="range" id="delay-slider" min="0" max="60" value="1">
+                <input type="number" id="delay-input" min="0" max="60" value="1">
+            </div>
         </div>
     </div>
     
     <div id="room-setup">
         <p style="margin-bottom: 20px; font-size: 18px;">プレイを開始しますか？</p>
-        <button id="play" class="btn gray" style="width: 140px; border-radius: 10px;">はい</button>
+        <button id="play" class="btn gray">はい</button>
     </div>
 
     <div id="game-container" style="display: none;">
@@ -33,8 +43,6 @@
             <div id="combo-count">0</div>
             <div style="font-size: 16px;">REN</div>
         </div>
-
-        <div id="perfect-clear-text">PERFECT<br>CLEAR</div>
 
         <div class="player-section side">
             <div class="label">HOLD</div>
@@ -49,16 +57,17 @@
         </div>
     </div>
 
-    <div id="game-over-screen" style="display: none;">
-        <h2 style="font-size: 40px; margin-bottom: 20px;">GAME OVER</h2>
-        <button id="restart-button" class="btn gray" style="width: 150px; height: 50px; border-radius: 10px; font-size: 18px;">RESTART</button>
+    <div id="game-over-screen">
+        <h2 style="font-size: 40px; margin-bottom: 10px; color: #ff3333;">GAME OVER</h2>
+        <p id="final-score" style="font-size: 20px; margin-bottom: 20px;">SCORE: 0</p>
+        <button id="restart-button" class="btn gray">RESTART</button>
     </div>
 
     <div class="touch-controls">
         <div class="control-left-group">
             <button id="ctrl-hold" class="btn gray" style="margin-bottom: 10px;">HOLD</button>
             <div class="d-pad">
-                <button id="ctrl-up" class="btn blue">SPACE(Hard Drop)</button>
+                <button id="ctrl-up" class="btn blue">HARD DROP</button>
                 <div class="move-row">
                     <button id="ctrl-left" class="btn">←</button>
                     <button id="ctrl-right" class="btn">→</button>
@@ -66,7 +75,6 @@
                 <button id="ctrl-down" class="btn">↓</button>
             </div>
         </div>
-
         <div class="control-right-group">
             <button id="ctrl-rot-l" class="btn purple">Z</button>
             <button id="ctrl-rot-r" class="btn purple">X</button>
