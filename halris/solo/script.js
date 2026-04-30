@@ -23,32 +23,25 @@ const COLORS = { i:'#00eeee', o:'#eeee00', t:'#6730bf', s:'#00ee00', z:'#ff4d4d'
 const SHAPES = { i:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], o:[[1,1],[1,1]], t:[[0,1,0],[1,1,1],[0,0,0]], s:[[0,1,1],[1,1,0],[0,0,0]], z:[[1,1,0],[0,1,1],[0,0,0]], j:[[1,0,0],[1,1,1],[0,0,0]], l:[[0,0,1],[1,1,1],[0,0,0]] };
 
 let board, current, holdPiece, canHold, bag, nextQueue, score, totalLines, level, gameOver;
-let clearAnimTimer = 0, clearingLines = [], gameInterval, requestID;
+let clearAnimTimer = 0, clearingLines = [], gameInterval, clearAnimDuration = 1;
 
-// 消去猶予の初期設定 (TETR.IO基準の1F)
-let clearAnimDuration = 1;
-
-// --- 設定UIの同期 ---
+// UI同期ロジック
 document.addEventListener('DOMContentLoaded', () => {
     const slider = document.getElementById('delay-slider');
     const input = document.getElementById('delay-input');
-
-    const syncDelay = (val) => {
-        val = Math.max(0, Math.min(60, val));
-        clearAnimDuration = val;
-        slider.value = val;
-        input.value = val;
+    const sync = (v) => {
+        v = Math.max(0, Math.min(60, v));
+        clearAnimDuration = v; slider.value = v; input.value = v;
     };
+    slider.oninput = (e) => sync(parseInt(e.target.value));
+    input.onchange = (e) => sync(parseInt(e.target.value));
 
-    slider.oninput = (e) => syncDelay(parseInt(e.target.value));
-    input.onchange = (e) => syncDelay(parseInt(e.target.value));
-    
     document.getElementById('play').onclick = resetGame;
     document.getElementById('restart-button').onclick = resetGame;
 });
 
-function sync() {
-    if(gameOver) return;
+function syncFirebase() {
+    if (gameOver || !current) return;
     set(ref(db, `games/${roomId}/player`), { board, pos: current.pos, type: current.type, shape: current.shape });
 }
 
@@ -60,31 +53,35 @@ function collide(b, p) {
 }
 
 function spawn(type = null) {
-    if(bag.length < 7) bag = Object.keys(SHAPES).sort(() => Math.random() - 0.5);
-    while(nextQueue.length < 5) nextQueue.push(bag.pop());
+    if (bag.length < 7) bag = Object.keys(SHAPES).sort(() => Math.random() - 0.5);
+    while (nextQueue.length < 5) nextQueue.push(bag.pop());
     let t = type || nextQueue.shift();
     current = { pos: { x: 3, y: 0 }, shape: SHAPES[t], type: t };
-    if(collide(board, current)) { gameOver = true; document.getElementById('game-over-screen').style.display='flex'; }
-    canHold = true; drawNext(); drawHold(); sync();
+    if (collide(board, current)) {
+        gameOver = true;
+        document.getElementById('game-over-screen').style.display = 'flex';
+        document.getElementById('final-score').innerText = `SCORE: ${score}`;
+    }
+    canHold = true; drawNext(); drawHold(); syncFirebase();
 }
 
 function drop() {
-    if(gameOver || !current || clearAnimTimer > 0) return;
+    if (gameOver || !current || clearAnimTimer > 0) return;
     current.pos.y++;
-    if(collide(board, current)) { current.pos.y--; lock(); }
-    else sync();
+    if (collide(board, current)) { current.pos.y--; lock(); }
+    else syncFirebase();
 }
 
 function lock() {
     current.shape.forEach((row, y) => row.forEach((v, x) => {
-        if(v && current.pos.y+y >= 0) board[current.pos.y+y][current.pos.x+x] = COLORS[current.type];
+        if (v && current.pos.y + y >= 0) board[current.pos.y + y][current.pos.x + x] = COLORS[current.type];
     }));
     clearingLines = [];
-    for(let y=0; y<ROWS; y++) if(board[y].every(cell => cell)) clearingLines.push(y);
+    for (let y = 0; y < ROWS; y++) if (board[y].every(c => c)) clearingLines.push(y);
     
-    if(clearingLines.length > 0) {
+    if (clearingLines.length > 0) {
         clearAnimTimer = clearAnimDuration;
-        if(clearAnimDuration === 0) finishLocking(); // 0Fなら即処理
+        if (clearAnimDuration === 0) finishLocking();
     } else {
         finishLocking();
     }
@@ -93,23 +90,22 @@ function lock() {
 function finishLocking() {
     const cleared = clearingLines.length;
     board = board.filter((_, i) => !clearingLines.includes(i));
-    while(board.length < ROWS) board.unshift(Array(COLS).fill(null));
+    while (board.length < ROWS) board.unshift(Array(COLS).fill(null));
     
-    if(cleared > 0) {
+    if (cleared > 0) {
         score += cleared * 100 * level;
         totalLines += cleared;
         document.getElementById('score-display').innerText = score;
         document.getElementById('line-count').innerText = totalLines;
-        
-        // レベルアップ演出
+
         let nextL = Math.floor(totalLines / 10) + 1;
-        if(nextL > level) {
+        if (nextL > level) {
             level = nextL;
-            document.getElementById('level').innerText = level;
             const lText = document.getElementById('level-up-text');
             const lNum = document.getElementById('level');
+            lNum.innerText = level;
             lText.classList.remove('level-up-animate'); lNum.classList.remove('level-flash');
-            void lText.offsetWidth; // 強制リフロー
+            void lText.offsetWidth; // リフロー強制
             lText.classList.add('level-up-animate'); lNum.classList.add('level-flash');
             updateSpeed();
         }
@@ -121,32 +117,32 @@ function finishLocking() {
 function resetGame() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     score = 0; totalLines = 0; level = 1; gameOver = false; holdPiece = null; nextQueue = []; bag = [];
-    document.getElementById('room-setup').style.display='none';
-    document.getElementById('game-container').style.display='flex';
-    document.getElementById('game-over-screen').style.display='none';
-    spawn(); update(); updateSpeed();
+    document.getElementById('room-setup').style.display = 'none';
+    document.getElementById('game-container').style.display = 'flex';
+    document.getElementById('game-over-screen').style.display = 'none';
+    spawn(); requestAnimationFrame(update); updateSpeed();
 }
 
 function updateSpeed() {
-    if(gameInterval) clearInterval(gameInterval);
-    gameInterval = setInterval(drop, Math.max(100, 1000 - (level-1)*100));
+    if (gameInterval) clearInterval(gameInterval);
+    gameInterval = setInterval(drop, Math.max(100, 1000 - (level - 1) * 100));
 }
 
 function update() {
-    if(gameOver) return;
-    if(clearAnimTimer > 0) {
+    if (gameOver) return;
+    if (clearAnimTimer > 0) {
         clearAnimTimer--;
-        if(clearAnimTimer <= 0) finishLocking();
+        if (clearAnimTimer <= 0) finishLocking();
     }
-    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     board.forEach((row, y) => row.forEach((c, x) => {
-        if(c) { ctx.fillStyle = clearingLines.includes(y) ? '#fff' : c; ctx.fillRect(x*SIZE, y*SIZE, SIZE-1, SIZE-1); }
+        if (c) { ctx.fillStyle = clearingLines.includes(y) ? '#fff' : c; ctx.fillRect(x*SIZE, y*SIZE, SIZE-1, SIZE-1); }
     }));
-    if(current && clearAnimTimer === 0) {
+    if (current && clearAnimTimer === 0) {
         ctx.fillStyle = COLORS[current.type];
-        current.shape.forEach((row, y) => row.forEach((v, x) => { if(v) ctx.fillRect((current.pos.x+x)*SIZE, (current.pos.y+y)*SIZE, SIZE-1, SIZE-1); }));
+        current.shape.forEach((row, y) => row.forEach((v, x) => { if (v) ctx.fillRect((current.pos.x+x)*SIZE, (current.pos.y+y)*SIZE, SIZE-1, SIZE-1); }));
     }
-    requestID = requestAnimationFrame(update);
+    requestAnimationFrame(update);
 }
 
 function drawHold() {
@@ -163,12 +159,10 @@ function drawNext() {
     });
 }
 
-// 操作系 (キーボード)
 window.onkeydown = e => {
-    if(gameOver || !current) return;
-    const k = e.key.toLowerCase();
-    if(k === 'arrowleft') { current.pos.x--; if(collide(board,current)) current.pos.x++; sync(); }
-    if(k === 'arrowright') { current.pos.x++; if(collide(board,current)) current.pos.x--; sync(); }
-    if(k === 'arrowdown') drop();
-    if(k === ' ') { while(!collide(board,current)) current.pos.y++; current.pos.y--; lock(); }
+    if (gameOver || !current) return;
+    if (e.key === 'ArrowLeft') { current.pos.x--; if(collide(board, current)) current.pos.x++; syncFirebase(); }
+    if (e.key === 'ArrowRight') { current.pos.x++; if(collide(board, current)) current.pos.x--; syncFirebase(); }
+    if (e.key === 'ArrowDown') drop();
+    if (e.key === ' ') { while(!collide(board, current)) current.pos.y++; current.pos.y--; lock(); }
 };
