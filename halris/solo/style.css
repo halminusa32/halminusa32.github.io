@@ -1,29 +1,80 @@
 @font-face {
+    font-family: 'Keifont';
+    src: url('https://halminusa32.github.io/fonts/keifont.ttf') format('truetype');
+}
+@font-face {
     font-family: 'NicoMoji';
     src: url('https://halminusa32.github.io/fonts/nicomoji-plus_v2-5.ttf') format('truetype');
 }
-body { background: #000; color: #fff; font-family: 'NicoMoji', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; }
-#side-info { position: fixed; top: 20px; left: 20px; }
-.label { font-size: 12px; color: #888; }
-#game-container { display: flex; gap: 20px; background: #111; padding: 20px; border: 2px solid #444; border-radius: 10px; }
+
+body { 
+    background: #000; color: #fff; font-family: 'NicoMoji', monospace; 
+    display: flex; flex-direction: column; align-items: center; justify-content: center; 
+    min-height: 100vh; margin: 0; overflow: hidden; touch-action: none; 
+}
+
+#side-info {
+    position: fixed; top: 20px; left: 20px;
+    text-align: left; pointer-events: none; z-index: 10;
+}
+#side-info h1 { 
+    font-size: 18px; color: #ff3333; margin: 0; 
+    text-shadow: 2px 2px 0px #000; line-height: 1.2;
+}
+#side-info p { font-size: 10px; color: #888; margin-top: 5px; }
+
+.line-container { margin-top: 15px; border-top: 1px solid #333; padding-top: 10px; }
+#line-count { font-size: 28px; color: #00eeee; font-family: monospace; font-weight: bold; }
+#score-display, #level { font-size: 24px; color: #ffcc00; font-family: monospace; font-weight: bold; margin-bottom: 5px; }
+
+#room-setup { background: #111; padding: 40px; border-radius: 12px; border: 2px solid #333; text-align: center; }
+
+#game-container { 
+    position: relative;
+    display: flex; gap: 20px; background: #111; padding: 20px; border-radius: 10px; border: 2px solid #444; align-items: flex-start; 
+}
+
+/* REN表示 */
+#combo-container {
+    position: absolute; right: -90px; top: 40%; text-align: center; color: #ffeb3b;
+    text-shadow: 2px 2px #000, 0 0 10px #f57c00; pointer-events: none; opacity: 0; transform: scale(0.5); transition: opacity 0.2s;
+}
+#combo-container.active { opacity: 1; animation: combo-bump 0.2s ease-out forwards; }
+@keyframes combo-bump {
+    0% { transform: scale(0.8) rotate(0deg); }
+    50% { transform: scale(1.5) rotate(-10deg); }
+    100% { transform: scale(1.2) rotate(-5deg); }
+}
+
+/* パフェ表示 */
+#perfect-clear-text {
+    position: absolute; top: 20%; left: 50%; transform: translateX(-50%); text-align: center;
+    font-size: 32px; color: #ffeb3b; text-shadow: 0 0 10px #fff, 0 0 20px #ffeb3b, 2px 2px 2px #000;
+    pointer-events: none; opacity: 0; z-index: 200; line-height: 1.2;
+}
+.pc-animate { animation: pc-fade-up 1.5s ease-out forwards; }
+@keyframes pc-fade-up {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); }
+    80% { opacity: 1; transform: translate(-50%, -40px) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(1); }
+}
+
+.player-section { display: flex; flex-direction: column; align-items: center; }
+.side { width: 70px; }
 canvas { background: #1a1a1a; border: 1px solid #333; }
-.btn { cursor: pointer; padding: 10px 20px; background: #333; color: #fff; border: 1px solid #555; border-radius: 5px; }
+.label { font-size: 10px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
 
-/* レベルアップ文字の浮遊アニメーション */
-#level-up-text {
-    position: absolute; top: 0; left: 0; color: #ffcc00; font-size: 14px; opacity: 0; pointer-events: none;
-}
-.level-up-animate { animation: level-up-fade 1.5s ease-out forwards; }
-@keyframes level-up-fade {
-    0% { opacity: 0; transform: translateY(0); }
-    20% { opacity: 1; transform: translateY(-20px); }
-    100% { opacity: 0; transform: translateY(-40px); }
+#game-over-screen {
+    display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.85); color: white; flex-direction: column; justify-content: center; align-items: center; z-index: 1000;
 }
 
-/* 数字がピカッと光る */
-.level-flash { animation: flash-effect 0.5s ease-out; }
-@keyframes flash-effect {
-    0% { transform: scale(1); color: #fff; }
-    50% { transform: scale(1.3); color: #ffcc00; text-shadow: 0 0 10px #fff; }
-    100% { transform: scale(1); color: #fff; }
-}
+.touch-controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; pointer-events: none; }
+.control-left-group, .control-right-group { display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
+.btn { width: 65px; height: 65px; border-radius: 50%; border: 2px solid #444; background: rgba(50, 50, 50, 0.8); color: #fff; font-weight: bold; cursor: pointer; user-select: none; }
+.blue { background: rgba(0, 123, 255, 0.7); width: 120px; border-radius: 10px; height: 50px; font-size: 10px; }
+.purple { background: rgba(111, 66, 193, 0.7); width: 80px; height: 80px; font-size: 24px; }
+.gray { width: 80px; height: 40px; border-radius: 10px; font-size: 14px; background: #333; }
+
+@media (max-width: 900px) { #game-container { scale: 0.8; } #combo-container { right: -60px; scale: 0.8; } }
