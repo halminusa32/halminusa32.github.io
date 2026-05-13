@@ -1,0 +1,110 @@
+/* 全体の背景設定 */
+body {
+    background-color: #222;
+    color: white;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+}
+
+/* UIパネル */
+#ui-container {
+    background: #333;
+    padding: 25px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border: 1px solid #444;
+}
+
+.file-input-group {
+    margin: 15px 0;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #bbb;
+}
+
+/* ゲーム画面（レーン） */
+#game-screen {
+    position: relative;
+    width: 900px;
+    height: 160px;
+    background: #000;
+    border-top: 4px solid #666;
+    border-bottom: 4px solid #666;
+    overflow: hidden;
+}
+
+#lane {
+    position: absolute;
+    top: 30px;
+    width: 100%;
+    height: 65px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* 判定枠 */
+#judge-line {
+    position: absolute;
+    left: 100px;
+    top: 30px;
+    width: 65px;
+    height: 65px;
+    border: 6px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    z-index: 10;
+    box-sizing: border-box;
+}
+
+/* ノーツのデザイン */
+.note {
+    position: absolute;
+    top: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.don { 
+    background: radial-gradient(circle at 30% 30%, #ff6666, #cc0000); 
+    border: 2px solid #fff; 
+}
+
+.ka { 
+    background: radial-gradient(circle at 30% 30%, #6666ff, #0000cc); 
+    border: 2px solid #fff; 
+}
+
+/* ボタン */
+button {
+    width: 100%;
+    padding: 12px;
+    font-size: 18px;
+    cursor: pointer;
+    background: #f39c12;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+button:hover:not(:disabled) {
+    background: #e67e22;
+}
+
+button:disabled {
+    background: #555;
+    color: #888;
+    cursor: not-allowed;
+}
