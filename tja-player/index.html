@@ -2,38 +2,44 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TJA Web Player + Mini Taiko</title>
+    <title>Advanced TJA Player</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <div id="ui-container">
-        <h2>TJA Web Player</h2>
-        <div class="file-input-group">
-            <label>1. TJAファイル: <input type="file" id="tja-file" accept=".tja"></label>
+        <h2>TJA Web Player Pro</h2>
+        <div class="file-inputs">
+            <div class="input-group">
+                <label>TJAファイル (.tja)</label>
+                <input type="file" id="tja-file" accept=".tja">
+            </div>
+            <div class="input-group">
+                <label>音源ファイル (.ogg, .mp3)</label>
+                <input type="file" id="audio-file" accept=".ogg, .mp3">
+            </div>
         </div>
-        <div class="file-input-group">
-            <label>2. 音源 (ogg/mp3): <input type="file" id="audio-file" accept=".ogg, .mp3"></label>
-        </div>
-        <button id="play-btn" disabled>再生開始</button>
-        <p style="font-size: 12px; color: #aaa;">操作: F, J (ドン) / D, K (カッ)</p>
+        <button id="play-btn" disabled>演奏開始</button>
+        <p id="status-msg"></p>
     </div>
 
     <div id="game-screen">
-        <div id="lane"></div>
-        <div id="judge-line">
-            <div id="flash"></div>
+        <div id="info-panel">
+            <span id="title-display">TITLE: --</span>
+            <span id="bpm-display">BPM: --</span>
         </div>
+        <div id="lane"></div>
+        <div id="judge-line"><div id="flash"></div></div>
         <div id="note-container"></div>
         
         <div id="hud-container">
             <div id="combo-display">0</div>
             <div id="mini-taiko">
-                <div class="face"></div> <div class="rim-l"></div> <div class="rim-r"></div> </div>
+                <div class="face"></div>
+                <div class="rim-l"></div>
+                <div class="rim-r"></div>
+            </div>
         </div>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
