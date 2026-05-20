@@ -1,8 +1,7 @@
-/* 全体の背景設定 */
 body {
     background-color: #222;
     color: white;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-family: sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -11,100 +10,132 @@ body {
     margin: 0;
 }
 
-/* UIパネル */
 #ui-container {
     background: #333;
-    padding: 25px;
-    border-radius: 15px;
-    margin-bottom: 30px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    border: 1px solid #444;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-.file-input-group {
-    margin: 15px 0;
-}
-
-label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 14px;
-    color: #bbb;
-}
-
-/* ゲーム画面（レーン） */
 #game-screen {
     position: relative;
     width: 900px;
-    height: 160px;
+    height: 200px; /* 太鼓のために少し高くした */
     background: #000;
-    border-top: 4px solid #666;
-    border-bottom: 4px solid #666;
+    border-top: 4px solid #555;
+    border-bottom: 4px solid #555;
     overflow: hidden;
 }
 
 #lane {
     position: absolute;
-    top: 30px;
+    top: 35px;
     width: 100%;
-    height: 65px;
-    background: rgba(255, 255, 255, 0.05);
+    height: 60px;
+    background: rgba(255, 255, 255, 0.1);
 }
 
-/* 判定枠 */
 #judge-line {
     position: absolute;
     left: 100px;
     top: 30px;
-    width: 65px;
-    height: 65px;
-    border: 6px solid rgba(255, 255, 255, 0.4);
+    width: 70px;
+    height: 70px;
+    border: 5px solid rgba(255, 255, 255, 0.5);
     border-radius: 50%;
     z-index: 10;
-    box-sizing: border-box;
 }
 
-/* ノーツのデザイン */
+#flash {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: white;
+    opacity: 0;
+}
+
+#flash.active {
+    animation: hit-flash 0.1s ease-out;
+}
+
+@keyframes hit-flash {
+    0% { opacity: 0.8; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.2); }
+}
+
 .note {
     position: absolute;
-    top: 30px;
+    top: 35px;
     width: 60px;
     height: 60px;
     border-radius: 50%;
     transform: translateX(-50%);
-    box-shadow: 0 0 10px rgba(0,0,0,0.5);
 }
 
-.don { 
-    background: radial-gradient(circle at 30% 30%, #ff6666, #cc0000); 
-    border: 2px solid #fff; 
+.don { background: radial-gradient(circle, #ff4444, #990000); border: 2px solid white; }
+.ka { background: radial-gradient(circle, #4444ff, #000099); border: 2px solid white; }
+
+/* ▼ コンボとミニ太鼓のレイアウト ▼ */
+#hud-container {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
 }
 
-.ka { 
-    background: radial-gradient(circle at 30% 30%, #6666ff, #0000cc); 
-    border: 2px solid #fff; 
-}
-
-/* ボタン */
-button {
-    width: 100%;
-    padding: 12px;
-    font-size: 18px;
-    cursor: pointer;
-    background: #f39c12;
-    border: none;
-    border-radius: 8px;
-    color: white;
+#combo-display {
+    font-size: 24px;
     font-weight: bold;
-    transition: 0.2s;
+    color: #ffcc00;
+    text-shadow: 2px 2px 0 black;
+    margin-bottom: 5px;
 }
 
-button:hover:not(:disabled) {
-    background: #e67e22;
+/* 和太鼓の本体 */
+#mini-taiko {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    background: #cc0000; /* 胴の色（赤） */
+    border-radius: 10px;
+    border: 2px solid #660000;
 }
 
-button:disabled {
-    background: #555;
-    color: #888;
-    cursor: not-allowed;
+/* 太鼓の面（ドン） */
+#mini-taiko .face {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 50px;
+    height: 50px;
+    background: #ffcccc;
+    border-radius: 50%;
+    border: 2px solid #333;
+    transition: background 0.05s;
 }
+
+/* フチ（カッ） */
+#mini-taiko .rim-l,
+#mini-taiko .rim-r {
+    position: absolute;
+    top: 5px;
+    width: 10px;
+    height: 50px;
+    background: #4444ff;
+    opacity: 0; /* 普段は透明 */
+    transition: opacity 0.05s;
+}
+
+#mini-taiko .rim-l { left: -5px; border-radius: 5px 0 0 5px; }
+#mini-taiko .rim-r { right: -5px; border-radius: 0 5px 5px 0; }
+
+/* 叩いた時のアニメーションクラス */
+#mini-taiko.hit-don .face { background: #ff4444; }
+#mini-taiko.hit-ka .rim-l,
+#mini-taiko.hit-ka .rim-r { opacity: 1; }
