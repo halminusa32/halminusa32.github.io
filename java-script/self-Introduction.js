@@ -1,7 +1,7 @@
 function intro_typeWriter() {
   const texts = [
     "名前: はるみん",
-    "年齢: 14歳",
+    "年齢: 15歳",
     "好きなもの: 音ゲー"
   ];
   const target = document.getElementById("intro_typewriter");
