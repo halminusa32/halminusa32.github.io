@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webリモートデスクトップ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="control-panel">
+        <button id="connectBtn">接続</button>
+        <button id="disconnectBtn" disabled>切断</button>
+    </div>
+
+    <div id="screen-container">
+        <canvas id="remoteScreen" width="1024" height="768"></canvas>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
