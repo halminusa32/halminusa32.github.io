@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  guacamole:
+    image: guacamole/guacamole:latest
+    container_name: guacamole
+    environment:
+      GUACD_HOSTNAME: guacd
+      GUACD_PORT: 4822
+    ports:
+      - "8080:8080"
+    depends_on:
+      - guacd
+    restart: unless-stopped
+    networks:
+      - guacamole-network
+
+  guacd:
+    image: guacamole/guacd:latest
+    container_name: guacd
+    restart: unless-stopped
+    networks:
+      - guacamole-network
+
+networks:
+  guacamole-network:
+    driver: bridge
