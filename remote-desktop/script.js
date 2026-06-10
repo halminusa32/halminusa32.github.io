@@ -1,86 +1,161 @@
-// HTMLの要素を取得
-const canvas = document.getElementById('remoteScreen');
-const ctx = canvas.getContext('2d');
-const connectBtn = document.getElementById('connectBtn');
+let client = null;
+
+const loginForm = document.getElementById('loginForm');
+const loginPanel = document.getElementById('login-panel');
+const desktopPanel = document.getElementById('desktop-panel');
+const rdpContainer = document.getElementById('rdp-container');
 const disconnectBtn = document.getElementById('disconnectBtn');
+const loginStatus = document.getElementById('loginStatus');
+const connectionStatus = document.getElementById('connectionStatus');
 
-let ws = null;
-
-// 1. 接続ボタンが押されたときの処理
-connectBtn.addEventListener('click', () => {
-    // 画面にダイアログを表示して接続先URLを入力させる
-    const url = prompt("接続先のURLを入力してください:", "ws://localhost:8080");
+// フォーム送信時の処理
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
     
-    // キャンセルされた場合、または空欄の場合は接続処理を中止
-    if (!url) {
-        return; 
+    const hostname = document.getElementById('hostname').value.trim();
+    const port = document.getElementById('port').value;
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const domain = document.getElementById('domain').value.trim();
+    
+    if (!hostname || !username || !password) {
+        showLoginStatus('すべての必須フィールドを入力してください', 'error');
+        return;
     }
-
-    ws = new WebSocket(url);
-    ws.binaryType = 'arraybuffer'; // 画像データをバイナリで受け取る設定
-
-    // 接続成功時
-    ws.onopen = () => {
-        alert('サーバーに接続しました。');
-        connectBtn.disabled = true;
-        disconnectBtn.disabled = false;
-    };
-
-    // サーバーから画面データ（画像）を受信したとき
-    ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-            const blob = new Blob([event.data], { type: 'image/jpeg' });
-            const img = new Image();
-            
-            img.onload = () => {
-                // Canvasのサイズを送信されてきた画像のサイズに自動調整
-                canvas.width = img.width;
-                canvas.height = img.height;
-                // 画面を描画
-                ctx.drawImage(img, 0, 0);
-            };
-            img.src = URL.createObjectURL(blob);
+    
+    showLoginStatus('接続中...', 'info');
+    
+    try {
+        // バックエンドサーバーに接続情報を送信
+        const response = await fetch('/api/rdp-connect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                hostname: hostname,
+                port: parseInt(port),
+                username: username,
+                password: password,
+                domain: domain || undefined
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || '接続に失敗しました');
         }
-    };
-
-    // 切断時
-    ws.onclose = () => {
-        alert('接続が切断されました。');
-        connectBtn.disabled = false;
-        disconnectBtn.disabled = true;
-    };
+        
+        const data = await response.json();
+        
+        // 接続成功後、Guacamoleで表示
+        connectGuacamole(data.token);
+        
+    } catch (error) {
+        console.error('接続エラー:', error);
+        showLoginStatus('エラー: ' + error.message, 'error');
+    }
 });
 
-// 2. 切断ボタンが押されたときの処理
+function showLoginStatus(message, type) {
+    loginStatus.textContent = message;
+    loginStatus.className = 'status-message ' + type;
+}
+
+function connectGuacamole(token) {
+    // Guacamoleクライアントの初期化
+    const guac = new Guacamole.Client(
+        new Guacamole.WebSocketTunnel('/guacamole/websocket-tunnel?token=' + token)
+    );
+    
+    // RDP画面をコンテナに追加
+    rdpContainer.innerHTML = '';
+    rdpContainer.appendChild(guac.getDisplay().getElement());
+    
+    // 接続成功
+    guac.connect();
+    
+    guac.onconnect = () => {
+        console.log('Guacamoleに接続しました');
+        loginPanel.classList.remove('active');
+        desktopPanel.classList.add('active');
+        connectionStatus.textContent = '接続済み';
+        client = guac;
+    };
+    
+    guac.onerror = (error) => {
+        console.error('Guacamoleエラー:', error);
+        connectionStatus.textContent = 'エラー';
+        showLoginStatus('接続エラー: ' + error.message, 'error');
+        setTimeout(() => {
+            disconnectSession();
+        }, 2000);
+    };
+    
+    guac.ondisconnect = () => {
+        console.log('切断されました');
+        disconnectSession();
+    };
+    
+    // マウスとキーボード入力をサポート
+    const display = guac.getDisplay();
+    
+    // マウス入力
+    display.getElement().addEventListener('mousemove', (e) => {
+        const rect = display.getElement().getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        guac.sendMouseMove(x, y);
+    });
+    
+    display.getElement().addEventListener('mousedown', (e) => {
+        guac.sendMouseDown(e.button);
+        e.preventDefault();
+    });
+    
+    display.getElement().addEventListener('mouseup', (e) => {
+        guac.sendMouseUp(e.button);
+        e.preventDefault();
+    });
+    
+    // キーボード入力
+    document.addEventListener('keydown', (e) => {
+        if (client && client.isConnected && desktopPanel.classList.contains('active')) {
+            guac.sendKeyDown(e.keyCode);
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        if (client && client.isConnected && desktopPanel.classList.contains('active')) {
+            guac.sendKeyUp(e.keyCode);
+        }
+    });
+}
+
+// 切断ボタン
 disconnectBtn.addEventListener('click', () => {
-    if (ws) ws.close();
+    if (client) {
+        client.disconnect();
+    }
+    disconnectSession();
 });
 
-// 3. マウス操作をサーバーに送信する処理
-canvas.addEventListener('mousemove', (e) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    ws.send(JSON.stringify({ type: 'mousemove', x: x, y: y }));
-});
+function disconnectSession() {
+    if (client) {
+        client.disconnect();
+        client = null;
+    }
+    loginPanel.classList.add('active');
+    desktopPanel.classList.remove('active');
+    rdpContainer.innerHTML = '';
+    loginForm.reset();
+    loginStatus.textContent = '';
+    connectionStatus.textContent = '';
+}
 
-canvas.addEventListener('mousedown', (e) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'mousedown', button: e.button }));
-});
-
-canvas.addEventListener('mouseup', (e) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'mouseup', button: e.button }));
-});
-
-// 4. キーボード入力をサーバーに送信する処理
-window.addEventListener('keydown', (e) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    
-    e.preventDefault(); // ブラウザ標準のショートカット（F5やCtrl+Sなど）を無効化
-    ws.send(JSON.stringify({ type: 'keydown', key: e.key }));
+// ページを離れる時に接続を切断
+window.addEventListener('beforeunload', () => {
+    if (client && client.isConnected) {
+        client.disconnect();
+    }
 });
