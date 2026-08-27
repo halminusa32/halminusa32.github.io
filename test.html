@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>otoware.wav</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    min-height: 100%;
+    background: transparent;
+    font-family:
+        "gg sans",
+        "Noto Sans",
+        "Helvetica Neue",
+        Arial,
+        sans-serif;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+
+/* Discord風オーディオコンテナ */
+.audio-card {
+    width: 420px;
+    max-width: 100%;
+
+    background: #1e1f22;
+    color: #dbdee1;
+
+    border-radius: 8px;
+
+    padding: 10px 12px;
+
+    user-select: none;
+}
+
+/* ファイル情報 */
+.audio-metadata {
+    display: flex;
+    align-items: center;
+
+    margin-bottom: 8px;
+}
+
+.file-icon {
+    position: relative;
+
+    width: 30px;
+    height: 36px;
+
+    margin-right: 9px;
+
+    flex-shrink: 0;
+
+    background: #5865f2;
+
+    border-radius: 3px;
+}
+
+/* ファイルの折れ部分 */
+.file-icon::before {
+    content: "";
+
+    position: absolute;
+
+    right: 0;
+    top: 0;
+
+    width: 9px;
+    height: 9px;
+
+    background: #1e1f22;
+
+    clip-path: polygon(
+        0 0,
+        100% 100%,
+        0 100%
+    );
+}
+
+/* スピーカー */
+.file-icon::after {
+    content: "🔊";
+
+    position: absolute;
+
+    left: 5px;
+    bottom: 4px;
+
+    font-size: 14px;
+}
+
+.metadata-content {
+    min-width: 0;
+}
+
+.filename {
+    color: #00a8fc;
+
+    font-size: 14px;
+    line-height: 18px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.filesize {
+    color: #b5bac1;
+
+    font-size: 11px;
+    line-height: 15px;
+}
+
+/* プレイヤー */
+.audio-controls {
+    display: flex;
+    align-items: center;
+
+    width: 100%;
+
+    height: 28px;
+
+    gap: 8px;
+}
+
+/* 再生 / 一時停止 */
+.play-button {
+    width: 27px;
+    height: 27px;
+
+    flex-shrink: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 0;
+    padding: 0;
+
+    background: transparent;
+    color: #dbdee1;
+
+    cursor: pointer;
+
+    border-radius: 4px;
+
+    font-size: 19px;
+}
+
+.play-button:hover {
+    background: #35373c;
+    color: #fff;
+}
+
+/* 時間 */
+.duration-wrapper {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+
+    flex-shrink: 0;
+
+    color: #b5bac1;
+
+    font-family: Consolas, monospace;
+    font-size: 11px;
+}
+
+.duration-display {
+    min-width: 32px;
+
+    text-align: center;
+}
+
+.duration-separator {
+    color: #72767d;
+}
+
+/* シークバー */
+.seek-wrapper {
+    position: relative;
+
+    flex: 1;
+
+    height: 20px;
+
+    display: flex;
+    align-items: center;
+
+    cursor: pointer;
+}
+
+.seek-bar {
+    position: relative;
+
+    width: 100%;
+    height: 4px;
+
+    background: #4e5058;
+
+    border-radius: 2px;
+
+    overflow: visible;
+}
+
+.seek-buffer {
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    width: 0%;
+    height: 100%;
+
+    background: #686b75;
+
+    border-radius: 2px;
+}
+
+.seek-progress {
+    position: absolute;
+
+    left: 0;
+    top: 0;
+
+    width: 0%;
+    height: 100%;
+
+    background: #5865f2;
+
+    border-radius: 2px;
+}
+
+.seek-grabber {
+    position: absolute;
+
+    right: -5px;
+    top: 50%;
+
+    width: 10px;
+    height: 10px;
+
+    transform: translateY(-50%);
+
+    background: #5865f2;
+
+    border-radius: 50%;
+
+    opacity: 0;
+
+    transition: opacity .1s;
+}
+
+.seek-wrapper:hover .seek-grabber {
+    opacity: 1;
+}
+
+/* 音量 */
+.volume-container {
+    position: relative;
+
+    flex-shrink: 0;
+}
+
+.volume-button {
+    width: 28px;
+    height: 28px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 0;
+
+    background: transparent;
+    color: #b5bac1;
+
+    cursor: pointer;
+
+    border-radius: 4px;
+
+    font-size: 17px;
+}
+
+.volume-button:hover {
+    background: #35373c;
+    color: #fff;
+}
+
+/* 音量ポップアップ */
+.volume-popup {
+    position: absolute;
+
+    display: none;
+
+    right: 0;
+    bottom: 35px;
+
+    width: 130px;
+
+    padding: 10px;
+
+    background: #111214;
+
+    border-radius: 6px;
+
+    box-shadow:
+        0 5px 20px rgba(0,0,0,.45);
+
+    z-index: 20;
+}
+
+.volume-popup.show {
+    display: block;
+}
+
+.volume-slider {
+    appearance: none;
+
+    width: 100%;
+    height: 4px;
+
+    border-radius: 2px;
+
+    background: #4e5058;
+
+    outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    appearance: none;
+
+    width: 10px;
+    height: 10px;
+
+    border-radius: 50%;
+
+    background: #5865f2;
+
+    cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+
+    border: 0;
+    border-radius: 50%;
+
+    background: #5865f2;
+
+    cursor: pointer;
+}
+
+/* 自動再生失敗時 */
+.autoplay-message {
+    display: none;
+
+    margin-top: 5px;
+
+    color: #b5bac1;
+
+    font-size: 11px;
+}
+
+.audio-card.autoplay-blocked .autoplay-message {
+    display: block;
+}
+</style>
+</head>
+
+<body>
+
+<div class="audio-card" id="audioCard">
+
+    <!-- ファイル情報 -->
+    <div class="audio-metadata">
+
+        <div class="file-icon"></div>
+
+        <div class="metadata-content">
+
+            <div
+                class="filename"
+                id="filename"
+            >
+                otoware.wav
+            </div>
+
+            <div
+                class="filesize"
+                id="filesize"
+            >
+                読み込み中...
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- コントロール -->
+    <div class="audio-controls">
+
+        <!-- 再生 / 一時停止 -->
+        <button
+            class="play-button"
+            id="playButton"
+            aria-label="プレイ"
+        >
+            ▶
+        </button>
+
+
+        <!-- 時間 -->
+        <div class="duration-wrapper">
+
+            <span
+                class="duration-display"
+                id="currentTime"
+            >
+                0:00
+            </span>
+
+            <span class="duration-separator">
+                /
+            </span>
+
+            <span
+                class="duration-display"
+                id="duration"
+            >
+                0:00
+            </span>
+
+        </div>
+
+
+        <!-- シークバー -->
+        <div
+            class="seek-wrapper"
+            id="seekWrapper"
+        >
+
+            <div class="seek-bar">
+
+                <div
+                    class="seek-buffer"
+                    id="seekBuffer"
+                ></div>
+
+                <div
+                    class="seek-progress"
+                    id="seekProgress"
+                >
+                    <span class="seek-grabber"></span>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- 音量 -->
+        <div class="volume-container">
+
+            <button
+                class="volume-button"
+                id="volumeButton"
+                aria-label="音量をコントロールする"
+            >
+                🔊
+            </button>
+
+            <div
+                class="volume-popup"
+                id="volumePopup"
+            >
+
+                <input
+                    class="volume-slider"
+                    id="volumeSlider"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.001"
+                    value="1"
+                >
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="autoplay-message">
+        自動再生がブロックされました。クリックして再生
+    </div>
+
+</div>
+
+
+<!--
+    =========================================================
+    ここが音声本体
+    =========================================================
+
+    自前デコーダーは使用しない。
+
+    ブラウザのネイティブHTMLMediaElementに
+    WAVのデコードと再生を完全に任せる。
+
+    loop="true" なので強制無限リピート。
+-->
+<audio
+    id="audio"
+    src="./wav/otoware.wav"
+    preload="metadata"
+    autoplay
+    loop
+    playsinline
+></audio>
+
+
+<script>
+"use strict";
+
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const audio =
+    document.getElementById("audio");
+
+const card =
+    document.getElementById("audioCard");
+
+const playButton =
+    document.getElementById("playButton");
+
+const currentTime =
+    document.getElementById("currentTime");
+
+const duration =
+    document.getElementById("duration");
+
+const seekWrapper =
+    document.getElementById("seekWrapper");
+
+const seekProgress =
+    document.getElementById("seekProgress");
+
+const seekBuffer =
+    document.getElementById("seekBuffer");
+
+const volumeButton =
+    document.getElementById("volumeButton");
+
+const volumePopup =
+    document.getElementById("volumePopup");
+
+const volumeSlider =
+    document.getElementById("volumeSlider");
+
+const filesize =
+    document.getElementById("filesize");
+
+
+/* =========================================================
+   設定
+========================================================= */
+
+/*
+ * 無限ループ
+ *
+ * HTMLのloop属性だけでなくJS側でも設定。
+ */
+audio.loop = true;
+
+
+/*
+ * 初期音量
+ */
+audio.volume = 1;
+
+
+/* =========================================================
+   時間フォーマット
+========================================================= */
+
+function formatTime(seconds) {
+
+    if (!Number.isFinite(seconds))
+        return "0:00";
+
+    seconds =
+        Math.max(
+            0,
+            Math.floor(seconds)
+        );
+
+    const minutes =
+        Math.floor(seconds / 60);
+
+    const secs =
+        seconds % 60;
+
+    return (
+        minutes +
+        ":" +
+        String(secs).padStart(2, "0")
+    );
+}
+
+
+/* =========================================================
+   ファイルサイズ取得
+========================================================= */
+
+fetch(
+    "./wav/otoware.wav",
+    {
+        method: "HEAD",
+        cache: "no-store"
+    }
+)
+.then(response => {
+
+    const length =
+        response.headers.get(
+            "Content-Length"
+        );
+
+    if (!length) {
+        filesize.textContent = "";
+        return;
+    }
+
+    const bytes =
+        Number(length);
+
+    if (bytes >= 1024 * 1024) {
+
+        filesize.textContent =
+            (
+                bytes /
+                1024 /
+                1024
+            ).toFixed(2) +
+            " MB";
+
+    } else {
+
+        filesize.textContent =
+            (
+                bytes /
+                1024
+            ).toFixed(2) +
+            " KB";
+    }
+
+})
+.catch(() => {
+
+    /*
+     * Content-Lengthが取得できなくても
+     * プレイヤー自体は普通に動作する。
+     */
+
+    filesize.textContent = "";
+});
+
+
+/* =========================================================
+   メタデータ読み込み
+========================================================= */
+
+audio.addEventListener(
+    "loadedmetadata",
+    () => {
+
+        duration.textContent =
+            formatTime(audio.duration);
+
+        currentTime.textContent =
+            "0:00";
+
+        updateProgress();
+    }
+);
+
+
+/* =========================================================
+   バッファ状態
+========================================================= */
+
+audio.addEventListener(
+    "progress",
+    () => {
+
+        if (
+            !audio.duration ||
+            !audio.buffered.length
+        ) {
+            return;
+        }
+
+        try {
+
+            const end =
+                audio.buffered.end(
+                    audio.buffered.length - 1
+                );
+
+            const percent =
+                Math.min(
+                    100,
+                    end /
+                    audio.duration *
+                    100
+                );
+
+            seekBuffer.style.width =
+                percent + "%";
+
+        } catch {}
+    }
+);
+
+
+/* =========================================================
+   再生位置
+========================================================= */
+
+audio.addEventListener(
+    "timeupdate",
+    updateProgress
+);
+
+audio.addEventListener(
+    "durationchange",
+    updateProgress
+);
+
+
+function updateProgress() {
+
+    const dur =
+        audio.duration;
+
+    if (
+        !Number.isFinite(dur) ||
+        dur <= 0
+    ) {
+        return;
+    }
+
+    const pos =
+        audio.currentTime;
+
+    const percent =
+        Math.min(
+            100,
+            Math.max(
+                0,
+                pos / dur * 100
+            )
+        );
+
+    currentTime.textContent =
+        formatTime(pos);
+
+    duration.textContent =
+        formatTime(dur);
+
+    seekProgress.style.width =
+        percent + "%";
+}
+
+
+/* =========================================================
+   再生状態
+========================================================= */
+
+audio.addEventListener(
+    "play",
+    () => {
+
+        playButton.textContent =
+            "❚❚";
+
+        card.classList.remove(
+            "autoplay-blocked"
+        );
+    }
+);
+
+
+audio.addEventListener(
+    "pause",
+    () => {
+
+        playButton.textContent =
+            "▶";
+    }
+);
+
+
+/* =========================================================
+   再生ボタン
+========================================================= */
+
+playButton.addEventListener(
+    "click",
+    async event => {
+
+        event.stopPropagation();
+
+        if (audio.paused) {
+
+            try {
+
+                await audio.play();
+
+                card.classList.remove(
+                    "autoplay-blocked"
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "再生できません:",
+                    error
+                );
+            }
+
+        } else {
+
+            audio.pause();
+        }
+    }
+);
+
+
+/* =========================================================
+   シーク
+========================================================= */
+
+seekWrapper.addEventListener(
+    "click",
+    event => {
+
+        if (!audio.duration)
+            return;
+
+        const rect =
+            seekWrapper.getBoundingClientRect();
+
+        const x =
+            event.clientX -
+            rect.left;
+
+        const percent =
+            Math.max(
+                0,
+                Math.min(
+                    1,
+                    x / rect.width
+                )
+            );
+
+        audio.currentTime =
+            percent *
+            audio.duration;
+    }
+);
+
+
+/* =========================================================
+   音量ボタン
+========================================================= */
+
+volumeButton.addEventListener(
+    "click",
+    event => {
+
+        event.stopPropagation();
+
+        volumePopup.classList.toggle(
+            "show"
+        );
+    }
+);
+
+
+/* =========================================================
+   音量変更
+========================================================= */
+
+volumeSlider.addEventListener(
+    "input",
+    () => {
+
+        audio.volume =
+            Number(
+                volumeSlider.value
+            );
+
+        updateVolumeIcon();
+    }
+);
+
+
+function updateVolumeIcon() {
+
+    const v =
+        audio.volume;
+
+    if (v === 0) {
+
+        volumeButton.textContent =
+            "🔇";
+
+    } else if (v < 0.5) {
+
+        volumeButton.textContent =
+            "🔈";
+
+    } else {
+
+        volumeButton.textContent =
+            "🔊";
+    }
+}
+
+
+/* =========================================================
+   外側クリックで音量パネルを閉じる
+========================================================= */
+
+document.addEventListener(
+    "click",
+    () => {
+
+        volumePopup.classList.remove(
+            "show"
+        );
+    }
+);
+
+
+/* =========================================================
+   自動再生
+========================================================= */
+
+async function startAutoplay() {
+
+    /*
+     * loopを念のため再設定
+     */
+    audio.loop = true;
+
+    /*
+     * 音量100%
+     */
+    audio.volume =
+        Number(
+            volumeSlider.value
+        );
+
+    try {
+
+        await audio.play();
+
+        card.classList.remove(
+            "autoplay-blocked"
+        );
+
+    } catch (error) {
+
+        /*
+         * Chrome / Firefox / Edge等の
+         * 自動再生ポリシーにより拒否された場合。
+         */
+
+        console.log(
+            "自動再生がブロックされました。",
+            error
+        );
+
+        card.classList.add(
+            "autoplay-blocked"
+        );
+    }
+}
+
+
+/* =========================================================
+   自動再生ブロック時の救済
+========================================================= */
+
+card.addEventListener(
+    "click",
+    async () => {
+
+        if (!audio.paused)
+            return;
+
+        try {
+
+            await audio.play();
+
+            card.classList.remove(
+                "autoplay-blocked"
+            );
+
+        } catch {}
+    }
+);
+
+
+/* =========================================================
+   「ended」を保険として処理
+========================================================= */
+
+/*
+ * loop=trueなら通常ここには来ない。
+ *
+ * 何らかのブラウザ差異や特殊なメディア処理で
+ * loopが解除された場合でも再生を続ける。
+ */
+
+audio.addEventListener(
+    "ended",
+    () => {
+
+        audio.currentTime = 0;
+
+        audio.play().catch(() => {});
+    }
+);
+
+
+/* =========================================================
+   エラー
+========================================================= */
+
+audio.addEventListener(
+    "error",
+    () => {
+
+        console.error(
+            "WAVの再生に失敗しました。",
+            audio.error
+        );
+    }
+);
+
+
+/* =========================================================
+   ページロード
+========================================================= */
+
+window.addEventListener(
+    "load",
+    () => {
+
+        startAutoplay();
+    }
+);
+
+
+/*
+ * DOM読み込み直後にも一度試行。
+ *
+ * loadイベントだけだと環境によっては
+ * メディアのロードタイミングとズレるため。
+ */
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        startAutoplay();
+    }
+);
+
+</script>
+
+</body>
+</html>
